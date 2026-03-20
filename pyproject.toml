@@ -1,0 +1,47 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "llm-strategy-lab"
+version = "0.1.0"
+description = "Research scaffold for LLM-assisted strategy generation, backtesting, and evaluation."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "UNLICENSED" }
+dependencies = ["PyYAML>=6.0.2"]
+
+[project.optional-dependencies]
+dev = [
+  "mypy>=1.11",
+  "pytest>=8.3",
+  "ruff>=0.11.0",
+  "types-PyYAML>=6.0.12.20241230",
+]
+
+[project.scripts]
+llm-strategy-lab = "llm_strategy_lab.cli:main"
+
+[tool.setuptools]
+package-dir = { "" = "packages/core/src" }
+
+[tool.setuptools.packages.find]
+where = ["packages/core/src"]
+include = ["llm_strategy_lab*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["packages/core/src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py39"
+
+[tool.ruff.lint]
+select = ["B", "E", "F", "I"]
+
+[tool.mypy]
+python_version = "3.11"
+mypy_path = "packages/core/src"
+packages = ["llm_strategy_lab"]
+warn_unused_ignores = true

@@ -1,0 +1,4 @@
+name: test
+output_root: runs
+log_level: DEBUG
+seed: 42

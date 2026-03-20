@@ -1,0 +1,84 @@
+name: Feature
+description: 新機能追加の提案
+title: "[Feature] "
+labels: ["type:feature", "needs-spec"]
+body:
+  - type: input
+    id: summary
+    attributes:
+      label: 概要
+      description: 何を追加するかを1文で書いてください
+      placeholder: 例) PCA_SUB の walk-forward 評価を追加する
+    validations:
+      required: true
+
+  - type: textarea
+    id: background
+    attributes:
+      label: 背景
+      description: なぜ必要か
+      placeholder: 現状の課題、論文との整合、実装上の不足など
+    validations:
+      required: true
+
+  - type: textarea
+    id: scope
+    attributes:
+      label: スコープ
+      description: この Issue でやること
+      placeholder: |
+        - API を追加
+        - 評価指標を追加
+        - テストを追加
+    validations:
+      required: true
+
+  - type: textarea
+    id: out_of_scope
+    attributes:
+      label: スコープ外
+      description: 今回やらないこと
+      placeholder: UI 対応、実運用対応など
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: 受け入れ条件
+      description: 完了判定
+      placeholder: |
+        - 指定コマンドで動作する
+        - テストが通る
+        - README 更新
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: 主な領域
+      options:
+        - area:common
+        - area:data
+        - area:strategies
+        - area:backtest
+        - area:eval
+        - area:llm
+        - area:sandbox
+        - area:ui
+        - area:api
+        - area:core
+        - area:docs
+        - area:infra
+    validations:
+      required: true
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: 優先度
+      options:
+        - prio:P0
+        - prio:P1
+        - prio:P2
+    validations:
+      required: true

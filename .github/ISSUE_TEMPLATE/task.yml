@@ -1,0 +1,54 @@
+name: Task
+description: 雑務・整備・運用タスク
+title: "[Task] "
+labels: ["type:task"]
+body:
+  - type: input
+    id: summary
+    attributes:
+      label: 内容
+      placeholder: 例) README にローカル起動手順を追加する
+    validations:
+      required: true
+
+  - type: textarea
+    id: checklist
+    attributes:
+      label: 作業項目
+      placeholder: |
+        - [ ] README 更新
+        - [ ] Makefile 追加
+        - [ ] テストコマンド確認
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: 主な領域
+      options:
+        - area:common
+        - area:data
+        - area:strategies
+        - area:backtest
+        - area:eval
+        - area:llm
+        - area:sandbox
+        - area:ui
+        - area:api
+        - area:core
+        - area:docs
+        - area:infra
+    validations:
+      required: true
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: 優先度
+      options:
+        - prio:P0
+        - prio:P1
+        - prio:P2
+    validations:
+      required: true

@@ -1,0 +1,75 @@
+name: Bug
+description: 不具合報告
+title: "[Bug] "
+labels: ["type:bug"]
+body:
+  - type: input
+    id: summary
+    attributes:
+      label: 症状
+      placeholder: 例) 日本翌営業日アライン時に future leak が発生する
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: 再現手順
+      placeholder: |
+        1. sample_research.yaml で実行
+        2. PCA_SUB を選択
+        3. backtest 実行
+        4. ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: 想定結果
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: 実際の結果
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: ログ・スクリーンショット
+      description: エラーログや補足
+
+  - type: dropdown
+    id: severity
+    attributes:
+      label: 重要度
+      options:
+        - prio:P0
+        - prio:P1
+        - prio:P2
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: 主な領域
+      options:
+        - area:common
+        - area:data
+        - area:strategies
+        - area:backtest
+        - area:eval
+        - area:llm
+        - area:sandbox
+        - area:ui
+        - area:api
+        - area:core
+        - area:docs
+        - area:infra
+    validations:
+      required: true

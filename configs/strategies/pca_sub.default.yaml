@@ -1,0 +1,8 @@
+name: pca_sub
+lookback_window: 60
+quantile: 0.3
+regularization: 0.001
+subspace:
+  - global
+  - country_spread
+  - cyclical_vs_defensive

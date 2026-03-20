@@ -1,0 +1,4 @@
+name: dev
+output_root: runs
+log_level: INFO
+seed: 42

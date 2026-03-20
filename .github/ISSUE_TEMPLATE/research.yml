@@ -1,0 +1,74 @@
+name: Research
+description: 検証課題・比較実験・論文反映
+title: "[Research] "
+labels: ["type:research"]
+body:
+  - type: input
+    id: topic
+    attributes:
+      label: 検証テーマ
+      placeholder: 例) q=0.3 と q=0.2 の比較
+    validations:
+      required: true
+
+  - type: textarea
+    id: hypothesis
+    attributes:
+      label: 仮説
+      placeholder: 何が改善する、または改善しないと考えるか
+    validations:
+      required: true
+
+  - type: textarea
+    id: method
+    attributes:
+      label: 検証方法
+      placeholder: |
+        - 対象期間
+        - 指標
+        - 比較対象
+        - 再現条件
+    validations:
+      required: true
+
+  - type: textarea
+    id: deliverables
+    attributes:
+      label: 成果物
+      placeholder: |
+        - 実験設定ファイル
+        - 結果サマリ
+        - 結論メモ
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: 主な領域
+      options:
+        - area:common
+        - area:data
+        - area:strategies
+        - area:backtest
+        - area:eval
+        - area:llm
+        - area:sandbox
+        - area:ui
+        - area:api
+        - area:core
+        - area:docs
+        - area:infra
+    validations:
+      required: true
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: 優先度
+      options:
+        - prio:P0
+        - prio:P1
+        - prio:P2
+    validations:
+      required: true

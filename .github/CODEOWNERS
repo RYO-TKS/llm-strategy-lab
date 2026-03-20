@@ -1,0 +1,13 @@
+* @RYO-TKS
+
+/docs/ @RYO-TKS
+/apps/api/ @RYO-TKS
+/apps/ui/ @RYO-TKS
+/packages/common/ @RYO-TKS
+/packages/data/ @RYO-TKS
+/packages/strategies/ @RYO-TKS
+/packages/backtest/ @RYO-TKS
+/packages/eval/ @RYO-TKS
+/packages/llm/ @RYO-TKS
+/packages/sandbox/ @RYO-TKS
+/packages/core/ @RYO-TKS

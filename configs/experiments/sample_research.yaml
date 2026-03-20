@@ -1,0 +1,16 @@
+experiment_id: sample_research
+environment: dev
+strategy:
+  name: pca_sub
+  params_file: configs/strategies/pca_sub.default.yaml
+dataset:
+  us_sectors: data/sample/us_sectors.csv
+  jp_sectors: data/sample/jp_sectors.csv
+  trading_calendar: data/sample/trading_calendar.csv
+backtest:
+  start: "2020-01-01"
+  end: "2020-12-31"
+  rebalance: monthly
+notes:
+  - Phase 1 の実験ランナー雛形確認用設定
+  - 実データ読込は未実装
