@@ -5,34 +5,9 @@ from __future__ import annotations
 import json
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict
 
-try:
-    import yaml
-except ImportError:  # pragma: no cover - exercised only before dependency install
-    yaml = None
-
-
-REQUIRED_KEYS = {"experiment_id", "environment", "strategy", "backtest"}
-
-
-def load_config(config_path: Path) -> Dict[str, Any]:
-    if not config_path.exists():
-        raise FileNotFoundError(f"Config not found: {config_path}")
-
-    text = config_path.read_text(encoding="utf-8")
-    if yaml is None:
-        raise RuntimeError("PyYAML is required. Run 'make setup' before loading YAML configs.")
-
-    data = yaml.safe_load(text)
-    if not isinstance(data, dict):
-        raise ValueError("Config root must be a mapping.")
-
-    missing = sorted(REQUIRED_KEYS - data.keys())
-    if missing:
-        raise ValueError(f"Config is missing required keys: {', '.join(missing)}")
-
-    return data
+from .config import load_experiment_config
+from .models import ExperimentConfig, RunRecord, RunStatus
 
 
 def next_run_directory(output_root: Path, experiment_id: str) -> Path:
@@ -50,38 +25,32 @@ def next_run_directory(output_root: Path, experiment_id: str) -> Path:
     return run_dir
 
 
-def create_scaffold_run(config_path: Path, output_root: Path) -> Path:
-    config = load_config(config_path)
-    run_dir = next_run_directory(
-        output_root=output_root,
-        experiment_id=str(config["experiment_id"]),
-    )
+def _build_summary(config: ExperimentConfig, run_record: RunRecord) -> str:
+    backtest_window = "unspecified"
+    if config.backtest.start and config.backtest.end:
+        backtest_window = (
+            f"{config.backtest.start.isoformat()} -> "
+            f"{config.backtest.end.isoformat()}"
+        )
 
-    strategy = config.get("strategy", {})
-    manifest = {
-        "experiment_id": config["experiment_id"],
-        "environment": config["environment"],
-        "strategy": strategy.get("name", "unknown"),
-        "status": "scaffold",
-        "created_at_utc": datetime.now(timezone.utc).isoformat(),
-        "config_path": str(config_path),
-        "message": (
-            "Repository scaffold is ready. "
-            "Implement data, strategy, and backtest logic next."
-        ),
-    }
+    dataset_inputs = "none"
+    if config.dataset and config.dataset.inputs:
+        dataset_inputs = ", ".join(sorted(config.dataset.inputs.keys()))
 
-    summary = "\n".join(
+    return "\n".join(
         [
             "# Scaffold Run",
             "",
-            f"- Experiment: `{manifest['experiment_id']}`",
-            f"- Environment: `{manifest['environment']}`",
-            f"- Strategy: `{manifest['strategy']}`",
+            f"- Run ID: `{run_record.run_id}`",
+            f"- Experiment: `{config.experiment_id}`",
+            f"- Environment: `{config.environment.name}`",
+            f"- Strategy: `{config.strategy.name}`",
+            f"- Backtest Window: `{backtest_window}`",
+            f"- Dataset Inputs: `{dataset_inputs}`",
             "",
             (
-                "This run confirms that the repository bootstrap, config loading, "
-                "and artifact output path are wired."
+                "This run confirms that typed config loading, run directory allocation, "
+                "and artifact output wiring are in place."
             ),
             "It does not execute the real strategy or backtest engine yet.",
             "",
@@ -93,6 +62,40 @@ def create_scaffold_run(config_path: Path, output_root: Path) -> Path:
             "",
         ]
     )
+
+
+def create_scaffold_run(config_path: Path, output_root: Path | None = None) -> Path:
+    config = load_experiment_config(config_path)
+    resolved_output_root = output_root.resolve() if output_root else config.environment.output_root
+    run_dir = next_run_directory(
+        output_root=resolved_output_root,
+        experiment_id=config.experiment_id,
+    )
+    started_at_utc = datetime.now(timezone.utc)
+
+    run_record = RunRecord(
+        run_id=run_dir.name,
+        experiment_id=config.experiment_id,
+        environment_name=config.environment.name,
+        strategy_name=config.strategy.name,
+        config_path=config.config_path,
+        output_dir=run_dir,
+        status=RunStatus.SCAFFOLD,
+        started_at_utc=started_at_utc,
+        notes=config.notes,
+        message=(
+            "Repository scaffold is ready. "
+            "Implement data, strategy, and backtest logic next."
+        ),
+        metadata={
+            "environment_config": config.environment.to_dict(),
+            "strategy_config": config.strategy.to_dict(),
+            "dataset_config": config.dataset.to_dict() if config.dataset else None,
+            "backtest_config": config.backtest.to_dict(),
+        },
+    )
+    manifest = run_record.to_dict()
+    summary = _build_summary(config, run_record)
 
     (run_dir / "manifest.json").write_text(
         json.dumps(manifest, ensure_ascii=False, indent=2) + "\n",
