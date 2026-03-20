@@ -13,7 +13,7 @@ from .models import (
     StrategyArtifact,
     StrategyConfig,
 )
-from .strategies import MomentumStrategy, create_strategy
+from .strategies import MomentumStrategy, PlainPCAStrategy, create_strategy
 
 __all__ = [
     "__version__",
@@ -27,6 +27,7 @@ __all__ = [
     "StrategyArtifact",
     "StrategyConfig",
     "MomentumStrategy",
+    "PlainPCAStrategy",
     "create_strategy",
     "load_experiment_config",
     "prepare_aligned_research_dataset",

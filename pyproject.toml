@@ -9,7 +9,10 @@ description = "Research scaffold for LLM-assisted strategy generation, backtesti
 readme = "README.md"
 requires-python = ">=3.9"
 license = { text = "UNLICENSED" }
-dependencies = ["PyYAML>=6.0.2"]
+dependencies = [
+  "numpy>=1.26,<3",
+  "PyYAML>=6.0.2",
+]
 
 [project.optional-dependencies]
 dev = [
