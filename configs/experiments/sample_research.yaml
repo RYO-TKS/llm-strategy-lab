@@ -13,4 +13,4 @@ backtest:
   rebalance: monthly
 notes:
   - Phase 1 の実験ランナー雛形確認用設定
-  - 実データ読込は未実装
+  - sample データの整合済み入力生成を確認する設定

@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import json
+import logging
 from datetime import datetime, timezone
 from pathlib import Path
 
 from .config import load_experiment_config
+from .data_pipeline import prepare_aligned_research_dataset
 from .models import ExperimentConfig, RunRecord, RunStatus
 
 
@@ -37,6 +39,13 @@ def _build_summary(config: ExperimentConfig, run_record: RunRecord) -> str:
     if config.dataset and config.dataset.inputs:
         dataset_inputs = ", ".join(sorted(config.dataset.inputs.keys()))
 
+    data_alignment = run_record.metadata.get("data_alignment")
+    aligned_signal_dates = "n/a"
+    quality_event_count = "n/a"
+    if isinstance(data_alignment, dict):
+        aligned_signal_dates = str(data_alignment.get("aligned_signal_dates", "n/a"))
+        quality_event_count = str(data_alignment.get("quality_event_count", "n/a"))
+
     return "\n".join(
         [
             "# Scaffold Run",
@@ -47,18 +56,20 @@ def _build_summary(config: ExperimentConfig, run_record: RunRecord) -> str:
             f"- Strategy: `{config.strategy.name}`",
             f"- Backtest Window: `{backtest_window}`",
             f"- Dataset Inputs: `{dataset_inputs}`",
+            f"- Aligned Signal Dates: `{aligned_signal_dates}`",
+            f"- Data Quality Events: `{quality_event_count}`",
             "",
             (
-                "This run confirms that typed config loading, run directory allocation, "
-                "and artifact output wiring are in place."
+                "This run confirms that typed config loading, market data ingestion, "
+                "trading-day alignment, and artifact output wiring are in place."
             ),
-            "It does not execute the real strategy or backtest engine yet.",
+            "It does not execute the strategy engine or full backtest yet.",
             "",
             "## Next Steps",
             "",
-            "1. Implement data ingestion and alignment.",
-            "2. Add strategy interfaces and concrete strategies.",
-            "3. Persist metrics and charts in this run directory.",
+            "1. Add strategy interfaces and concrete strategies.",
+            "2. Persist metrics and charts in this run directory.",
+            "3. Connect aligned data artifacts to the backtest layer.",
             "",
         ]
     )
@@ -66,12 +77,26 @@ def _build_summary(config: ExperimentConfig, run_record: RunRecord) -> str:
 
 def create_scaffold_run(config_path: Path, output_root: Path | None = None) -> Path:
     config = load_experiment_config(config_path)
+    logging.basicConfig(
+        level=getattr(logging, config.environment.log_level.upper(), logging.INFO),
+        format="%(levelname)s %(name)s: %(message)s",
+    )
+    logger = logging.getLogger(__name__)
     resolved_output_root = output_root.resolve() if output_root else config.environment.output_root
     run_dir = next_run_directory(
         output_root=resolved_output_root,
         experiment_id=config.experiment_id,
     )
     started_at_utc = datetime.now(timezone.utc)
+    data_alignment_summary = None
+    if config.dataset is not None:
+        prepared_dataset = prepare_aligned_research_dataset(
+            config.dataset,
+            backtest=config.backtest,
+            output_dir=run_dir,
+            logger=logger,
+        )
+        data_alignment_summary = prepared_dataset.summary()
 
     run_record = RunRecord(
         run_id=run_dir.name,
@@ -84,14 +109,15 @@ def create_scaffold_run(config_path: Path, output_root: Path | None = None) -> P
         started_at_utc=started_at_utc,
         notes=config.notes,
         message=(
-            "Repository scaffold is ready. "
-            "Implement data, strategy, and backtest logic next."
+            "Typed config loading and aligned market data preview are ready. "
+            "Implement strategy and backtest logic next."
         ),
         metadata={
             "environment_config": config.environment.to_dict(),
             "strategy_config": config.strategy.to_dict(),
             "dataset_config": config.dataset.to_dict() if config.dataset else None,
             "backtest_config": config.backtest.to_dict(),
+            "data_alignment": data_alignment_summary,
         },
     )
     manifest = run_record.to_dict()
