@@ -27,8 +27,8 @@ make test
 make run-sample
 ```
 
-`make run-sample` は現時点では実験ランナーの土台のみを実行し、`runs/` にスキャフォールド成果物を出力します。
-本格的なデータ取込、バックテスト、評価指標の実装は M1 の後続 Issue で進めます。
+`make run-sample` は現時点で MOM ベースライン戦略の signal / portfolio artifact までを生成します。
+本格的なバックテスト、評価指標、チャート生成は M1 の後続 Issue で進めます。
 
 ## GitHub 運用
 

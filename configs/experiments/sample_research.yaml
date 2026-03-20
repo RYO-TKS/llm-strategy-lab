@@ -1,8 +1,8 @@
 experiment_id: sample_research
 environment: dev
 strategy:
-  name: pca_sub
-  params_file: configs/strategies/pca_sub.default.yaml
+  name: mom
+  params_file: configs/strategies/mom.default.yaml
 dataset:
   us_sectors: data/sample/us_sectors.csv
   jp_sectors: data/sample/jp_sectors.csv
@@ -12,5 +12,5 @@ backtest:
   end: "2020-12-31"
   rebalance: monthly
 notes:
-  - Phase 1 の実験ランナー雛形確認用設定
-  - sample データの整合済み入力生成を確認する設定
+  - Phase 1 の MOM ベースライン戦略確認用設定
+  - sample データの整合済み入力から signal と portfolio を生成する設定
