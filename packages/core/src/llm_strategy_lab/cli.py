@@ -20,8 +20,8 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--output-root",
-        default="runs",
-        help="Directory where run artifacts will be written.",
+        default=None,
+        help="Optional override for the run artifact root directory.",
     )
     return parser
 
@@ -32,7 +32,7 @@ def main() -> int:
 
     run_dir = create_scaffold_run(
         config_path=Path(args.config),
-        output_root=Path(args.output_root),
+        output_root=Path(args.output_root) if args.output_root else None,
     )
     print(f"Scaffold run created at: {run_dir}")
     return 0
