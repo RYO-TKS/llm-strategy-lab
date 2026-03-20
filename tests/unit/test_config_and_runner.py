@@ -27,8 +27,8 @@ class ConfigAndRunnerTests(unittest.TestCase):
                 "name: dev\noutput_root: runs\nlog_level: INFO\nseed: 7\n",
             )
             _write_file(
-                root / "configs" / "strategies" / "pca_sub.default.yaml",
-                "name: pca_sub\nlookback_window: 60\nquantile: 0.3\n",
+                root / "configs" / "strategies" / "mom.yaml",
+                "name: mom\nq: 0.3\nrolling_window: 1\n",
             )
             _write_file(
                 root / "configs" / "experiments" / "sample.yaml",
@@ -37,8 +37,8 @@ class ConfigAndRunnerTests(unittest.TestCase):
                         "experiment_id: sample_research",
                         "environment: dev",
                         "strategy:",
-                        "  name: pca_sub",
-                        "  params_file: configs/strategies/pca_sub.default.yaml",
+                        "  name: mom",
+                        "  params_file: configs/strategies/mom.yaml",
                         "dataset:",
                         "  us_sectors: data/sample/us.csv",
                         "  jp_sectors: data/sample/jp.csv",
@@ -62,9 +62,9 @@ class ConfigAndRunnerTests(unittest.TestCase):
             self.assertEqual(config.environment.output_root, (root / "runs").resolve())
             self.assertEqual(
                 config.strategy.params_file,
-                (root / "configs" / "strategies" / "pca_sub.default.yaml").resolve(),
+                (root / "configs" / "strategies" / "mom.yaml").resolve(),
             )
-            self.assertEqual(config.strategy.params["lookback_window"], 60)
+            self.assertEqual(config.strategy.params["rolling_window"], 1)
             self.assertEqual(
                 config.dataset.us_sectors,
                 (root / "data" / "sample" / "us.csv").resolve(),
@@ -116,8 +116,8 @@ class ConfigAndRunnerTests(unittest.TestCase):
                 "name: dev\noutput_root: runs\nlog_level: INFO\nseed: 42\n",
             )
             _write_file(
-                root / "configs" / "strategies" / "pca_sub.default.yaml",
-                "name: pca_sub\nlookback_window: 60\nquantile: 0.3\n",
+                root / "configs" / "strategies" / "mom.yaml",
+                "name: mom\nq: 0.3\nrolling_window: 1\n",
             )
             _write_file(
                 root / "data" / "sample" / "us.csv",
@@ -246,8 +246,8 @@ class ConfigAndRunnerTests(unittest.TestCase):
                         "experiment_id: sample_research",
                         "environment: dev",
                         "strategy:",
-                        "  name: pca_sub",
-                        "  params_file: configs/strategies/pca_sub.default.yaml",
+                        "  name: mom",
+                        "  params_file: configs/strategies/mom.yaml",
                         "dataset:",
                         "  us_sectors: data/sample/us.csv",
                         "  jp_sectors: data/sample/jp.csv",
@@ -275,23 +275,32 @@ class ConfigAndRunnerTests(unittest.TestCase):
 
             self.assertEqual(manifest["status"], "scaffold")
             self.assertEqual(manifest["environment"], "dev")
-            self.assertEqual(manifest["strategy"], "pca_sub")
+            self.assertEqual(manifest["strategy"], "mom")
             self.assertEqual(manifest["notes"], ["typed config ready"])
             self.assertEqual(manifest["metadata"]["environment_config"]["seed"], 42)
             self.assertEqual(manifest["metadata"]["data_alignment"]["aligned_signal_dates"], 2)
+            self.assertEqual(len(manifest["strategy_artifacts"]), 1)
+            self.assertEqual(manifest["strategy_artifacts"][0]["strategy_name"], "mom")
+            self.assertTrue(manifest["strategy_artifacts"][0]["metadata"]["backtest_ready"])
             self.assertTrue((first_run / "alignment_index.csv").exists())
             self.assertTrue((first_run / "us_aligned_close_to_close.csv").exists())
             self.assertTrue((first_run / "jp_open_to_close.csv").exists())
             self.assertTrue((first_run / "data_quality_log.json").exists())
+            self.assertTrue((first_run / "mom_signals.csv").exists())
+            self.assertTrue((first_run / "mom_portfolio.csv").exists())
+            self.assertTrue((first_run / "mom_explanation.json").exists())
             self.assertIn("Backtest Window", summary)
             self.assertIn("Dataset Inputs", summary)
             self.assertIn("Aligned Signal Dates", summary)
+            self.assertIn("Portfolio Dates Prepared", summary)
 
     def test_constants_expose_expected_groups(self) -> None:
         self.assertIn("price", COLUMN_GROUPS)
         self.assertIn("signal", COLUMN_GROUPS)
         self.assertIn(SIGNAL, COLUMN_GROUPS["signal"])
         self.assertIn("date", PRICE_COLUMNS)
+        self.assertIn("market", COLUMN_GROUPS["portfolio"])
+        self.assertIn("sector", COLUMN_GROUPS["portfolio"])
 
     def test_prepare_aligned_research_dataset_skips_to_next_jp_open_and_logs_missing_sector(
         self,

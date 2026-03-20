@@ -1,4 +1,4 @@
-"""Scaffold runner used during repository bootstrap."""
+"""Strategy preview runner used during repository bootstrap."""
 
 from __future__ import annotations
 
@@ -10,6 +10,7 @@ from pathlib import Path
 from .config import load_experiment_config
 from .data_pipeline import prepare_aligned_research_dataset
 from .models import ExperimentConfig, RunRecord, RunStatus
+from .strategies import create_strategy
 
 
 def next_run_directory(output_root: Path, experiment_id: str) -> Path:
@@ -46,9 +47,18 @@ def _build_summary(config: ExperimentConfig, run_record: RunRecord) -> str:
         aligned_signal_dates = str(data_alignment.get("aligned_signal_dates", "n/a"))
         quality_event_count = str(data_alignment.get("quality_event_count", "n/a"))
 
+    portfolio_dates_prepared = "n/a"
+    portfolio_rows_prepared = "n/a"
+    if run_record.strategy_artifacts:
+        strategy_metadata = run_record.strategy_artifacts[0].metadata
+        portfolio_dates_prepared = str(len(strategy_metadata.get("portfolio_dates", [])))
+        portfolio_rows_prepared = str(
+            strategy_metadata.get("portfolio_row_count", "n/a")
+        )
+
     return "\n".join(
         [
-            "# Scaffold Run",
+            "# Strategy Preview Run",
             "",
             f"- Run ID: `{run_record.run_id}`",
             f"- Experiment: `{config.experiment_id}`",
@@ -58,18 +68,20 @@ def _build_summary(config: ExperimentConfig, run_record: RunRecord) -> str:
             f"- Dataset Inputs: `{dataset_inputs}`",
             f"- Aligned Signal Dates: `{aligned_signal_dates}`",
             f"- Data Quality Events: `{quality_event_count}`",
+            f"- Portfolio Dates Prepared: `{portfolio_dates_prepared}`",
+            f"- Portfolio Rows Prepared: `{portfolio_rows_prepared}`",
             "",
             (
                 "This run confirms that typed config loading, market data ingestion, "
-                "trading-day alignment, and artifact output wiring are in place."
+                "trading-day alignment, and baseline strategy artifact output are in place."
             ),
-            "It does not execute the strategy engine or full backtest yet.",
+            "It does not execute the backtest engine or evaluation metrics yet.",
             "",
             "## Next Steps",
             "",
-            "1. Add strategy interfaces and concrete strategies.",
-            "2. Persist metrics and charts in this run directory.",
-            "3. Connect aligned data artifacts to the backtest layer.",
+            "1. Add the remaining PCA-based strategies on the same interface.",
+            "2. Connect the standardized portfolio output to the backtest layer.",
+            "3. Persist metrics and charts in this run directory.",
             "",
         ]
     )
@@ -89,6 +101,7 @@ def create_scaffold_run(config_path: Path, output_root: Path | None = None) -> P
     )
     started_at_utc = datetime.now(timezone.utc)
     data_alignment_summary = None
+    strategy_artifacts = ()
     if config.dataset is not None:
         prepared_dataset = prepare_aligned_research_dataset(
             config.dataset,
@@ -97,6 +110,8 @@ def create_scaffold_run(config_path: Path, output_root: Path | None = None) -> P
             logger=logger,
         )
         data_alignment_summary = prepared_dataset.summary()
+        strategy = create_strategy(config.strategy)
+        strategy_artifacts = (strategy.run(prepared_dataset, output_dir=run_dir),)
 
     run_record = RunRecord(
         run_id=run_dir.name,
@@ -109,9 +124,10 @@ def create_scaffold_run(config_path: Path, output_root: Path | None = None) -> P
         started_at_utc=started_at_utc,
         notes=config.notes,
         message=(
-            "Typed config loading and aligned market data preview are ready. "
-            "Implement strategy and backtest logic next."
+            "Aligned data ingestion and baseline strategy artifacts are ready. "
+            "Implement the shared backtest engine next."
         ),
+        strategy_artifacts=strategy_artifacts,
         metadata={
             "environment_config": config.environment.to_dict(),
             "strategy_config": config.strategy.to_dict(),

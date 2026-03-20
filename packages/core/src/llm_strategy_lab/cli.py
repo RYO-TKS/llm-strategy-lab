@@ -11,7 +11,7 @@ from .runner import create_scaffold_run
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="llm-strategy-lab",
-        description="Run the scaffold experiment runner.",
+        description="Run the aligned-data and strategy preview experiment runner.",
     )
     parser.add_argument(
         "--config",
@@ -34,7 +34,7 @@ def main() -> int:
         config_path=Path(args.config),
         output_root=Path(args.output_root) if args.output_root else None,
     )
-    print(f"Scaffold run created at: {run_dir}")
+    print(f"Strategy preview run created at: {run_dir}")
     return 0
 
 

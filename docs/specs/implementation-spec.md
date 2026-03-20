@@ -10,7 +10,8 @@ Phase 1 では、次の 4 要素を最小動作品として揃えます。
 ## 現時点の前提
 
 このリポジトリは、まず運用ファイルとディレクトリ責務を固定するためのスキャフォールドです。
-`make run-sample` が出力するのは実験の成果物そのものではなく、後続実装のための run ディレクトリ雛形です。
+`make run-sample` は現時点で aligned dataset と MOM ベースライン戦略の signal / portfolio artifact を出力します。
+ただしバックテスト metrics と chart 類はまだ未実装です。
 
 ## Phase 1 で満たすべきこと
 

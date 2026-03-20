@@ -22,7 +22,7 @@ make test
 make run-sample
 ```
 
-`make run-sample` は `configs/experiments/sample_research.yaml` を読み込み、`runs/` にスキャフォールド成果物を生成します。
+`make run-sample` は `configs/experiments/sample_research.yaml` を読み込み、`runs/` に MOM ベースライン戦略の signal / portfolio 成果物を生成します。
 
 ## GitHub 側の作業
 
