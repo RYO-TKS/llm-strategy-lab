@@ -29,6 +29,7 @@ make run-sample
 
 `make run-sample` は現時点で MOM ベースライン戦略の signal / portfolio artifact までを生成します。
 本格的なバックテスト、評価指標、チャート生成は M1 の後続 Issue で進めます。
+実装済みの戦略インターフェースは `mom` と `pca_plain` で、sample 設定は現時点では `mom` を参照しています。
 
 ## GitHub 運用
 

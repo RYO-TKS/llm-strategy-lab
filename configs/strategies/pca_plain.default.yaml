@@ -1,0 +1,4 @@
+name: pca_plain
+q: 0.3
+rolling_window: 5
+components: 2
