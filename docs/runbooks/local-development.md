@@ -23,6 +23,8 @@ make run-sample
 llm-strategy-lab sample
 llm-strategy-lab run --config configs/experiments/sample_research.yaml --strategy pca_plain
 llm-strategy-lab compare --parent-run runs/sample_research/0016 --candidate-run runs/sample_research/0017
+llm-strategy-lab prompt-bundle --comparison runs/comparisons/sample_research-0016-to-0017
+llm-strategy-lab validate-proposal --comparison runs/comparisons/sample_research-0016-to-0017 --proposal-file tmp/proposal.json
 ```
 
 `make run-sample` は `llm-strategy-lab sample` を呼び、`runs/` に `runs/{experiment_id}/{iteration}` 構造で成果物を保存します。
@@ -30,6 +32,8 @@ llm-strategy-lab compare --parent-run runs/sample_research/0016 --candidate-run 
 sample 実行では MOM ベースライン戦略の signal / portfolio 成果物に加えて、backtest daily series、position contribution series、metrics JSON、FF3 / Carhart4 回帰 JSON、equity curve / drawdown / cumulative IC の SVG を生成します。
 `pca_plain` と `pca_sub` と `double` も同じ strategy interface で追加済みで、sample データは CLI override で PCA 系を回しても非空 artifact が出る日数を含みます。
 `llm-strategy-lab compare` は 2 つの succeeded run を比較し、metrics 差分、因子回帰差分、config diff、`parent_run_id` / `candidate_run_id` / `lineage_id` を含む comparison manifest を `runs/comparisons/` に保存します。
+`llm-strategy-lab prompt-bundle` は comparison から LLM 入力用の `prompt_bundle.json` と `proposal_schema.json` を生成します。
+`llm-strategy-lab validate-proposal` は proposal JSON を schema で検証し、invalid proposal は弾いて `proposal_validation.json` に理由を残し、valid proposal だけ `proposal_artifact.json` に保存します。
 
 ## GitHub 側の作業
 

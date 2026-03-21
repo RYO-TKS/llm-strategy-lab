@@ -17,6 +17,11 @@ from .models import (
     StrategyArtifact,
     StrategyConfig,
 )
+from .proposals import (
+    ProposalValidationError,
+    build_prompt_bundle,
+    validate_and_save_proposal,
+)
 from .runner import run_experiment
 from .strategies import (
     DoubleSortStrategy,
@@ -34,6 +39,7 @@ __all__ = [
     "DatasetConfig",
     "EnvironmentConfig",
     "ExperimentConfig",
+    "ProposalValidationError",
     "RunRecord",
     "RunStatus",
     "StrategyArtifact",
@@ -46,9 +52,11 @@ __all__ = [
     "run_daily_backtest",
     "run_backtest_evaluation",
     "compare_runs",
+    "build_prompt_bundle",
     "run_experiment",
     "load_experiment_config",
     "prepare_aligned_research_dataset",
+    "validate_and_save_proposal",
 ]
 
 __version__ = "0.1.0"

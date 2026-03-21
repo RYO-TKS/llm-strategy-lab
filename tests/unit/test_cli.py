@@ -96,6 +96,63 @@ class CliTests(unittest.TestCase):
             },
         )
 
+    def test_main_runs_prompt_bundle_subcommand(self) -> None:
+        bundle_path = Path("/tmp/runs/comparisons/sample_research-0001-to-0002/prompt_bundle.json")
+        with patch(
+            "llm_strategy_lab.cli.build_prompt_bundle",
+            return_value=bundle_path,
+        ) as mock_bundle:
+            stdout = io.StringIO()
+            with redirect_stdout(stdout):
+                result = main(
+                    [
+                        "prompt-bundle",
+                        "--comparison",
+                        "runs/comparisons/sample_research-0001-to-0002",
+                    ]
+                )
+
+        self.assertEqual(result, 0)
+        self.assertIn(str(bundle_path), stdout.getvalue())
+        self.assertEqual(
+            mock_bundle.call_args.kwargs,
+            {
+                "comparison_reference": Path("runs/comparisons/sample_research-0001-to-0002"),
+                "output_root": None,
+            },
+        )
+
+    def test_main_runs_validate_proposal_subcommand(self) -> None:
+        proposal_artifact_path = Path(
+            "/tmp/runs/comparisons/sample_research-0001-to-0002/proposal_artifact.json"
+        )
+        with patch(
+            "llm_strategy_lab.cli.validate_and_save_proposal",
+            return_value=proposal_artifact_path,
+        ) as mock_validate:
+            stdout = io.StringIO()
+            with redirect_stdout(stdout):
+                result = main(
+                    [
+                        "validate-proposal",
+                        "--comparison",
+                        "runs/comparisons/sample_research-0001-to-0002",
+                        "--proposal-file",
+                        "tmp/proposal.json",
+                    ]
+                )
+
+        self.assertEqual(result, 0)
+        self.assertIn(str(proposal_artifact_path), stdout.getvalue())
+        self.assertEqual(
+            mock_validate.call_args.kwargs,
+            {
+                "comparison_reference": Path("runs/comparisons/sample_research-0001-to-0002"),
+                "proposal_file": Path("tmp/proposal.json"),
+                "output_root": None,
+            },
+        )
+
     def test_main_supports_legacy_config_arguments(self) -> None:
         run_dir = Path("/tmp/runs/sample_research/0002")
         with patch(
