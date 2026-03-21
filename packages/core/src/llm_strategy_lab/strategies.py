@@ -50,6 +50,51 @@ PORTFOLIO_EXPORT_COLUMNS = (
     NET_EXPOSURE,
 )
 FeatureSpec = Tuple[str, str]
+DEFAULT_SUBSPACE_NAMES = (
+    "global",
+    "country_spread",
+    "cyclical_vs_defensive",
+)
+CYCLICAL_SECTORS = {
+    "US": {
+        "CONSUMER_DISCRETIONARY",
+        "ENERGY",
+        "FINANCIALS",
+        "INDUSTRIALS",
+        "INFORMATION_TECHNOLOGY",
+        "MATERIALS",
+        "REAL_ESTATE",
+    },
+    "JP": {
+        "AUTOMOBILES_TRANSPORTATION",
+        "BANKS",
+        "COMMERCIAL_WHOLESALE_TRADE",
+        "CONSTRUCTION_MATERIALS",
+        "ELECTRIC_APPLIANCES_PRECISION",
+        "ENERGY_RESOURCES",
+        "FINANCIALS_EX_BANKS",
+        "IT_SERVICES_OTHERS",
+        "MACHINERY",
+        "RAW_MATERIALS_CHEMICALS",
+        "REAL_ESTATE",
+        "RETAIL_TRADE",
+        "STEEL_NONFERROUS",
+        "TRANSPORTATION_LOGISTICS",
+    },
+}
+DEFENSIVE_SECTORS = {
+    "US": {
+        "COMMUNICATION_SERVICES",
+        "CONSUMER_STAPLES",
+        "HEALTH_CARE",
+        "UTILITIES",
+    },
+    "JP": {
+        "ELECTRIC_POWER_GAS",
+        "FOODS",
+        "PHARMACEUTICALS",
+    },
+}
 
 
 @dataclass(frozen=True)
@@ -125,7 +170,7 @@ def _resolve_quantile(params: Mapping[str, object]) -> float:
 
 
 def _resolve_rolling_window(params: Mapping[str, object]) -> int:
-    raw_window = params.get("rolling_window", 1)
+    raw_window = params.get("rolling_window", params.get("lookback_window", 1))
     try:
         rolling_window = int(raw_window)
     except (TypeError, ValueError) as exc:
@@ -140,6 +185,20 @@ def _resolve_rolling_window(params: Mapping[str, object]) -> int:
     return rolling_window
 
 
+def _resolve_regularization(params: Mapping[str, object]) -> float:
+    raw_regularization = params.get("regularization", 0.05)
+    try:
+        regularization = float(raw_regularization)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            f"regularization must be numeric, got {raw_regularization!r}"
+        ) from exc
+
+    if regularization < 0:
+        raise ValueError(f"regularization must be non-negative, got {regularization}")
+    return regularization
+
+
 def _resolve_component_count(params: Mapping[str, object]) -> int:
     raw_components = params.get("components", 1)
     try:
@@ -150,6 +209,20 @@ def _resolve_component_count(params: Mapping[str, object]) -> int:
     if components <= 0:
         raise ValueError(f"components must be greater than zero, got {components}")
     return components
+
+
+def _resolve_subspace_names(params: Mapping[str, object]) -> Tuple[str, ...]:
+    raw_subspace = params.get("subspace", DEFAULT_SUBSPACE_NAMES)
+    if isinstance(raw_subspace, str):
+        names = (raw_subspace.strip(),)
+    elif isinstance(raw_subspace, Sequence):
+        names = tuple(str(item).strip() for item in raw_subspace if str(item).strip())
+    else:
+        raise ValueError("subspace must be a string or sequence of strings")
+
+    if not names:
+        raise ValueError("subspace must contain at least one basis name")
+    return names
 
 
 def _compounded_return(values: Sequence[float]) -> float:
@@ -180,6 +253,226 @@ def _rounded_matrix(values: np.ndarray) -> List[List[float]]:
         [round(float(item), 6) for item in row]
         for row in values.tolist()
     ]
+
+
+def _build_feature_specs(
+    us_sectors: Sequence[str],
+    jp_sectors: Sequence[str],
+) -> Tuple[FeatureSpec, ...]:
+    return tuple(
+        [("US", sector) for sector in us_sectors]
+        + [("JP", sector) for sector in jp_sectors]
+    )
+
+
+def _prepare_joint_history_frame(
+    *,
+    signal_date: date,
+    lookback_dates: Sequence[date],
+    us_by_date: Mapping[date, Mapping[str, float]],
+    jp_by_date: Mapping[date, Mapping[str, float]],
+    us_sectors: Sequence[str],
+    jp_sectors: Sequence[str],
+) -> Optional[JsonDict]:
+    feature_specs = _build_feature_specs(us_sectors, jp_sectors)
+    history_rows: List[List[float]] = []
+    current_us = us_by_date.get(signal_date)
+    if current_us is None:
+        return None
+
+    for lookback_date in lookback_dates:
+        us_row = us_by_date.get(lookback_date)
+        jp_row = jp_by_date.get(lookback_date)
+        if us_row is None or jp_row is None:
+            return None
+
+        joint_row: List[float] = []
+        for market, sector in feature_specs:
+            source = us_row if market == "US" else jp_row
+            value = source.get(sector)
+            if value is None:
+                return None
+            joint_row.append(value)
+        history_rows.append(joint_row)
+
+    history_matrix = np.asarray(history_rows, dtype=float)
+    if history_matrix.shape[0] < 2:
+        return None
+
+    means = np.mean(history_matrix, axis=0)
+    stds = np.std(history_matrix, axis=0, ddof=1)
+    active_mask = stds > 1e-12
+    active_specs = [spec for spec, keep in zip(feature_specs, active_mask) if keep]
+    if len(active_specs) < 2:
+        return None
+
+    active_means = means[active_mask]
+    active_stds = stds[active_mask]
+    standardized_history = (history_matrix[:, active_mask] - active_means) / active_stds
+    correlation_matrix = np.corrcoef(standardized_history, rowvar=False)
+    if correlation_matrix.ndim != 2 or not np.all(np.isfinite(correlation_matrix)):
+        return None
+
+    us_indices = [
+        index
+        for index, (market, _sector) in enumerate(active_specs)
+        if market == "US"
+    ]
+    jp_indices = [
+        index
+        for index, (market, _sector) in enumerate(active_specs)
+        if market == "JP"
+    ]
+    if not us_indices or not jp_indices:
+        return None
+
+    current_us_vector = np.asarray(
+        [
+            (
+                float(current_us[active_specs[index][1]]) - float(active_means[index])
+            )
+            / float(active_stds[index])
+            for index in us_indices
+        ],
+        dtype=float,
+    )
+
+    return {
+        "signal_date": signal_date.isoformat(),
+        "lookback_start": lookback_dates[0].isoformat(),
+        "lookback_end": lookback_dates[-1].isoformat(),
+        "active_specs": tuple(active_specs),
+        "correlation_matrix": correlation_matrix,
+        "current_us_vector": current_us_vector,
+        "us_indices": tuple(us_indices),
+        "jp_indices": tuple(jp_indices),
+    }
+
+
+def _select_top_components(
+    matrix: np.ndarray,
+    *,
+    components: int,
+) -> Tuple[Tuple[float, ...], Tuple[np.ndarray, ...]]:
+    eigenvalues, eigenvectors = np.linalg.eigh(matrix)
+    sorted_indices = [
+        index
+        for index in np.argsort(eigenvalues)[::-1].tolist()
+        if float(eigenvalues[index]) > 1e-12
+    ][:components]
+    return (
+        tuple(float(eigenvalues[index]) for index in sorted_indices),
+        tuple(np.asarray(eigenvectors[:, index], dtype=float) for index in sorted_indices),
+    )
+
+
+def _restore_scores_from_components(
+    *,
+    component_values: Sequence[float],
+    component_vectors: Sequence[np.ndarray],
+    current_us_vector: np.ndarray,
+    active_specs: Sequence[FeatureSpec],
+    us_indices: Sequence[int],
+    jp_indices: Sequence[int],
+    jp_sectors: Sequence[str],
+    regularization: float = 0.0,
+) -> Tuple[JsonDict, List[JsonDict]]:
+    jp_scores = {sector: 0.0 for sector in jp_sectors}
+    component_details: List[JsonDict] = []
+
+    for component_rank, (eigenvalue, component_vector) in enumerate(
+        zip(component_values, component_vectors),
+        start=1,
+    ):
+        us_loadings = component_vector[list(us_indices)]
+        jp_loadings = component_vector[list(jp_indices)]
+        us_energy = float(np.dot(us_loadings, us_loadings))
+        denominator = us_energy + regularization
+        if denominator <= 1e-12:
+            continue
+
+        factor_score = float(np.dot(current_us_vector, us_loadings) / denominator)
+        for sector_name, loading in zip(
+            [active_specs[index][1] for index in jp_indices],
+            jp_loadings.tolist(),
+        ):
+            jp_scores[sector_name] += float(eigenvalue) * factor_score * float(loading)
+
+        component_details.append(
+            {
+                "rank": component_rank,
+                "eigenvalue": float(eigenvalue),
+                "factor_score": factor_score,
+                "us_loading_energy": us_energy,
+            }
+        )
+
+    return (
+        {
+            sector: round(float(score), 10)
+            for sector, score in jp_scores.items()
+        },
+        component_details,
+    )
+
+
+def _classify_cyclicality(market: str, sector: str) -> int:
+    if sector in CYCLICAL_SECTORS.get(market, set()):
+        return 1
+    if sector in DEFENSIVE_SECTORS.get(market, set()):
+        return -1
+    return 0
+
+
+def _build_subspace_vector(name: str, active_specs: Sequence[FeatureSpec]) -> np.ndarray:
+    if name == "global":
+        return np.ones(len(active_specs), dtype=float)
+    if name == "country_spread":
+        return np.asarray(
+            [1.0 if market == "US" else -1.0 for market, _sector in active_specs],
+            dtype=float,
+        )
+    if name == "cyclical_vs_defensive":
+        return np.asarray(
+            [
+                float(_classify_cyclicality(market, sector))
+                for market, sector in active_specs
+            ],
+            dtype=float,
+        )
+    raise ValueError(f"Unsupported subspace basis: {name}")
+
+
+def _orthonormalize_subspace_basis(
+    names: Sequence[str],
+    active_specs: Sequence[FeatureSpec],
+) -> Tuple[Tuple[str, ...], np.ndarray]:
+    raw_vectors = []
+    raw_names = []
+    for name in names:
+        vector = _build_subspace_vector(name, active_specs)
+        if float(np.linalg.norm(vector)) <= 1e-12:
+            continue
+        raw_vectors.append(vector)
+        raw_names.append(name)
+
+    if not raw_vectors:
+        raise ValueError("Requested subspace basis produced no active vectors.")
+
+    basis_matrix = np.column_stack(raw_vectors)
+    orthonormal_basis, triangular = np.linalg.qr(basis_matrix, mode="reduced")
+    keep_indices = [
+        index
+        for index in range(triangular.shape[1])
+        if abs(float(triangular[index, index])) > 1e-8
+    ]
+    if not keep_indices:
+        raise ValueError("Requested subspace basis is rank deficient.")
+
+    return (
+        tuple(raw_names[index] for index in keep_indices),
+        orthonormal_basis[:, keep_indices],
+    )
 
 
 class Strategy(ABC):
@@ -482,123 +775,45 @@ class PlainPCAStrategy(QuantileLongShortStrategy):
         us_sectors: Sequence[str],
         jp_sectors: Sequence[str],
     ) -> Optional[JsonDict]:
-        feature_specs: Tuple[FeatureSpec, ...] = tuple(
-            [("US", sector) for sector in us_sectors]
-            + [("JP", sector) for sector in jp_sectors]
+        joint_frame = _prepare_joint_history_frame(
+            signal_date=signal_date,
+            lookback_dates=lookback_dates,
+            us_by_date=us_by_date,
+            jp_by_date=jp_by_date,
+            us_sectors=us_sectors,
+            jp_sectors=jp_sectors,
         )
-        history_rows: List[List[float]] = []
-        current_us = us_by_date.get(signal_date)
-        if current_us is None:
+        if joint_frame is None:
             return None
 
-        for lookback_date in lookback_dates:
-            us_row = us_by_date.get(lookback_date)
-            jp_row = jp_by_date.get(lookback_date)
-            if us_row is None or jp_row is None:
-                return None
-
-            joint_row: List[float] = []
-            for market, sector in feature_specs:
-                source = us_row if market == "US" else jp_row
-                value = source.get(sector)
-                if value is None:
-                    return None
-                joint_row.append(value)
-            history_rows.append(joint_row)
-
-        history_matrix = np.asarray(history_rows, dtype=float)
-        if history_matrix.shape[0] < 2:
+        component_values, component_vectors = _select_top_components(
+            joint_frame["correlation_matrix"],
+            components=self.components,
+        )
+        if not component_values:
             return None
 
-        means = np.mean(history_matrix, axis=0)
-        stds = np.std(history_matrix, axis=0, ddof=1)
-        active_mask = stds > 1e-12
-        active_specs = [spec for spec, keep in zip(feature_specs, active_mask) if keep]
-        if len(active_specs) < 2:
-            return None
-
-        active_means = means[active_mask]
-        active_stds = stds[active_mask]
-        standardized_history = (history_matrix[:, active_mask] - active_means) / active_stds
-        correlation_matrix = np.corrcoef(standardized_history, rowvar=False)
-        if correlation_matrix.ndim != 2 or not np.all(np.isfinite(correlation_matrix)):
-            return None
-
-        eigenvalues, eigenvectors = np.linalg.eigh(correlation_matrix)
-        sorted_indices = [
-            index
-            for index in np.argsort(eigenvalues)[::-1].tolist()
-            if float(eigenvalues[index]) > 1e-12
-        ]
-        top_indices = sorted_indices[: self.components]
-        if not top_indices:
-            return None
-
-        us_indices = [
-            index
-            for index, (market, _sector) in enumerate(active_specs)
-            if market == "US"
-        ]
-        jp_indices = [
-            index
-            for index, (market, _sector) in enumerate(active_specs)
-            if market == "JP"
-        ]
-        if not us_indices or not jp_indices:
-            return None
-
-        current_us_values: List[float] = []
-        for index in us_indices:
-            _market, sector = active_specs[index]
-            current_value = current_us.get(sector)
-            if current_value is None:
-                return None
-            current_us_values.append(
-                (current_value - float(active_means[index])) / float(active_stds[index])
-            )
-
-        current_us_vector = np.asarray(current_us_values, dtype=float)
-        jp_scores = {sector: 0.0 for sector in jp_sectors}
-        component_details: List[JsonDict] = []
-
-        for component_rank, eigen_index in enumerate(top_indices, start=1):
-            eigenvalue = float(eigenvalues[eigen_index])
-            component_vector = eigenvectors[:, eigen_index]
-            us_loadings = component_vector[us_indices]
-            jp_loadings = component_vector[jp_indices]
-            us_energy = float(np.dot(us_loadings, us_loadings))
-            if us_energy <= 1e-12:
-                continue
-
-            factor_score = float(np.dot(current_us_vector, us_loadings) / us_energy)
-            for sector_name, loading in zip(
-                [active_specs[index][1] for index in jp_indices],
-                jp_loadings.tolist(),
-            ):
-                jp_scores[sector_name] += eigenvalue * factor_score * float(loading)
-
-            component_details.append(
-                {
-                    "rank": component_rank,
-                    "eigenvalue": eigenvalue,
-                    "factor_score": factor_score,
-                }
-            )
+        jp_scores, component_details = _restore_scores_from_components(
+            component_values=component_values,
+            component_vectors=component_vectors,
+            current_us_vector=joint_frame["current_us_vector"],
+            active_specs=joint_frame["active_specs"],
+            us_indices=joint_frame["us_indices"],
+            jp_indices=joint_frame["jp_indices"],
+            jp_sectors=jp_sectors,
+        )
 
         return {
-            "signal_date": signal_date.isoformat(),
-            "lookback_start": lookback_dates[0].isoformat(),
-            "lookback_end": lookback_dates[-1].isoformat(),
+            "signal_date": joint_frame["signal_date"],
+            "lookback_start": joint_frame["lookback_start"],
+            "lookback_end": joint_frame["lookback_end"],
             "joint_feature_labels": [
                 f"{market}:{sector}"
-                for market, sector in active_specs
+                for market, sector in joint_frame["active_specs"]
             ],
-            "joint_correlation_matrix": _rounded_matrix(correlation_matrix),
+            "joint_correlation_matrix": _rounded_matrix(joint_frame["correlation_matrix"]),
             "top_components": component_details,
-            "jp_scores": {
-                sector: round(float(score), 10)
-                for sector, score in jp_scores.items()
-            },
+            "jp_scores": jp_scores,
         }
 
     def compute_signal(self, dataset: PreparedResearchDataset) -> Tuple[SignalRecord, ...]:
@@ -685,10 +900,186 @@ class PlainPCAStrategy(QuantileLongShortStrategy):
         }
 
 
+class SubspacePCAStrategy(QuantileLongShortStrategy):
+    """Regularized PCA in a predefined low-dimensional subspace."""
+
+    def __init__(self, config: StrategyConfig) -> None:
+        super().__init__(config)
+        self.components = _resolve_component_count(config.params)
+        self.regularization = _resolve_regularization(config.params)
+        self.subspace_names = _resolve_subspace_names(config.params)
+        self._diagnostics_by_date: Dict[date, JsonDict] = {}
+
+    def _build_subspace_history(
+        self,
+        *,
+        signal_date: date,
+        lookback_dates: Sequence[date],
+        us_by_date: Mapping[date, Mapping[str, float]],
+        jp_by_date: Mapping[date, Mapping[str, float]],
+        us_sectors: Sequence[str],
+        jp_sectors: Sequence[str],
+    ) -> Optional[JsonDict]:
+        joint_frame = _prepare_joint_history_frame(
+            signal_date=signal_date,
+            lookback_dates=lookback_dates,
+            us_by_date=us_by_date,
+            jp_by_date=jp_by_date,
+            us_sectors=us_sectors,
+            jp_sectors=jp_sectors,
+        )
+        if joint_frame is None:
+            return None
+
+        active_names, orthonormal_basis = _orthonormalize_subspace_basis(
+            self.subspace_names,
+            joint_frame["active_specs"],
+        )
+        projected_matrix = (
+            orthonormal_basis.T
+            @ joint_frame["correlation_matrix"]
+            @ orthonormal_basis
+        )
+        regularized_matrix = (
+            (1.0 - self.regularization) * projected_matrix
+            + self.regularization * np.diag(np.diag(projected_matrix))
+        )
+        retained_components = min(self.components, orthonormal_basis.shape[1])
+        component_values, subspace_vectors = _select_top_components(
+            regularized_matrix,
+            components=retained_components,
+        )
+        if not component_values:
+            return None
+
+        full_component_vectors = tuple(
+            orthonormal_basis @ vector
+            for vector in subspace_vectors
+        )
+        jp_scores, component_details = _restore_scores_from_components(
+            component_values=component_values,
+            component_vectors=full_component_vectors,
+            current_us_vector=joint_frame["current_us_vector"],
+            active_specs=joint_frame["active_specs"],
+            us_indices=joint_frame["us_indices"],
+            jp_indices=joint_frame["jp_indices"],
+            jp_sectors=jp_sectors,
+            regularization=self.regularization,
+        )
+        for detail, subspace_vector in zip(component_details, subspace_vectors):
+            detail["basis_weights"] = {
+                name: round(float(weight), 6)
+                for name, weight in zip(active_names, subspace_vector.tolist())
+            }
+
+        return {
+            "signal_date": joint_frame["signal_date"],
+            "lookback_start": joint_frame["lookback_start"],
+            "lookback_end": joint_frame["lookback_end"],
+            "joint_feature_labels": [
+                f"{market}:{sector}"
+                for market, sector in joint_frame["active_specs"]
+            ],
+            "subspace_names": list(active_names),
+            "joint_correlation_matrix": _rounded_matrix(joint_frame["correlation_matrix"]),
+            "projected_subspace_matrix": _rounded_matrix(projected_matrix),
+            "regularized_subspace_matrix": _rounded_matrix(regularized_matrix),
+            "orthonormal_basis": _rounded_matrix(orthonormal_basis),
+            "top_components": component_details,
+            "jp_scores": jp_scores,
+        }
+
+    def compute_signal(self, dataset: PreparedResearchDataset) -> Tuple[SignalRecord, ...]:
+        us_by_date = _build_market_lookup(dataset.us_aligned_returns)
+        jp_by_date = _build_market_lookup(dataset.jp_open_to_close_returns)
+        signal_dates = sorted(set(us_by_date) & set(jp_by_date))
+        signal_records: List[SignalRecord] = []
+        self._diagnostics_by_date = {}
+
+        for current_index in range(self.rolling_window, len(signal_dates)):
+            signal_date = signal_dates[current_index]
+            lookback_dates = signal_dates[current_index - self.rolling_window : current_index]
+            diagnostic = self._build_subspace_history(
+                signal_date=signal_date,
+                lookback_dates=lookback_dates,
+                us_by_date=us_by_date,
+                jp_by_date=jp_by_date,
+                us_sectors=dataset.us_sectors,
+                jp_sectors=dataset.jp_sectors,
+            )
+            if diagnostic is None:
+                continue
+
+            self._diagnostics_by_date[signal_date] = diagnostic
+            scored_rows = [
+                (sector, float(diagnostic["jp_scores"].get(sector, 0.0)))
+                for sector in dataset.jp_sectors
+            ]
+            signal_records.extend(
+                self._build_ranked_signal_records(
+                    signal_date=signal_date,
+                    market=JP_MARKET,
+                    lookback_dates=lookback_dates,
+                    scored_rows=scored_rows,
+                )
+            )
+
+        return tuple(signal_records)
+
+    def explain(
+        self,
+        *,
+        dataset: PreparedResearchDataset,
+        signals: Sequence[SignalRecord],
+        portfolio: Sequence[PortfolioRecord],
+    ) -> JsonDict:
+        signal_dates = sorted({row.signal_date for row in signals})
+        portfolio_dates = sorted({row.signal_date for row in portfolio})
+        latest_date = signal_dates[-1] if signal_dates else None
+        latest_diagnostic = (
+            self._diagnostics_by_date.get(latest_date) if latest_date else None
+        )
+        return {
+            "strategy_name": self.name,
+            "summary": (
+                "Restrict the joint JP/US correlation structure to predefined macro subspaces, "
+                "estimate a diagonally-shrunk eigensystem inside that subspace, then restore "
+                "JP sector scores from the constrained components and the current US shock."
+            ),
+            "signal_definition": (
+                "The score for each JP sector is reconstructed from regularized subspace "
+                "components whose loadings are constrained to the requested basis vectors."
+            ),
+            "portfolio_construction": (
+                "Select the top and bottom q quantiles of restored JP scores and assign 50/50 "
+                "gross exposure across long and short buckets with equal weights within each side."
+            ),
+            "parameters": {
+                "q": self.q,
+                "rolling_window": self.rolling_window,
+                "components": self.components,
+                "regularization": self.regularization,
+                "subspace": list(self.subspace_names),
+            },
+            "input_markets": ["US", "JP"],
+            "us_universe_size": len(dataset.us_sectors),
+            "jp_universe_size": len(dataset.jp_sectors),
+            "eligible_signal_dates": len(signal_dates),
+            "backtest_portfolio_dates": len(portfolio_dates),
+            "selected_per_side": _selected_per_side(len(dataset.jp_sectors), self.q),
+            "signal_dates": [value.isoformat() for value in signal_dates],
+            "portfolio_dates": [value.isoformat() for value in portfolio_dates],
+            "latest_diagnostic": latest_diagnostic,
+            "comparison_ready_with": ["pca_plain", "mom"],
+        }
+
+
 def create_strategy(config: StrategyConfig) -> Strategy:
     strategy_name = config.name.strip().lower()
     if strategy_name == "mom":
         return MomentumStrategy(config)
     if strategy_name == "pca_plain":
         return PlainPCAStrategy(config)
+    if strategy_name == "pca_sub":
+        return SubspacePCAStrategy(config)
     raise ValueError(f"Unsupported strategy: {config.name}")
