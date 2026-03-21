@@ -273,7 +273,7 @@ class ConfigAndRunnerTests(unittest.TestCase):
             manifest = json.loads((first_run / "manifest.json").read_text(encoding="utf-8"))
             summary = (first_run / "SUMMARY.md").read_text(encoding="utf-8")
 
-            self.assertEqual(manifest["status"], "scaffold")
+            self.assertEqual(manifest["status"], "succeeded")
             self.assertEqual(manifest["environment"], "dev")
             self.assertEqual(manifest["strategy"], "mom")
             self.assertEqual(manifest["notes"], ["typed config ready"])
@@ -282,6 +282,8 @@ class ConfigAndRunnerTests(unittest.TestCase):
             self.assertEqual(len(manifest["strategy_artifacts"]), 1)
             self.assertEqual(manifest["strategy_artifacts"][0]["strategy_name"], "mom")
             self.assertTrue(manifest["strategy_artifacts"][0]["metadata"]["backtest_ready"])
+            self.assertIsNotNone(manifest["backtest_result"])
+            self.assertIn("annual_return", manifest["backtest_result"]["metrics"])
             self.assertTrue((first_run / "alignment_index.csv").exists())
             self.assertTrue((first_run / "us_aligned_close_to_close.csv").exists())
             self.assertTrue((first_run / "jp_open_to_close.csv").exists())
@@ -289,10 +291,15 @@ class ConfigAndRunnerTests(unittest.TestCase):
             self.assertTrue((first_run / "mom_signals.csv").exists())
             self.assertTrue((first_run / "mom_portfolio.csv").exists())
             self.assertTrue((first_run / "mom_explanation.json").exists())
+            self.assertTrue((first_run / "mom_backtest_daily.csv").exists())
+            self.assertTrue((first_run / "mom_backtest_positions.csv").exists())
+            self.assertTrue((first_run / "mom_backtest_metrics.json").exists())
             self.assertIn("Backtest Window", summary)
             self.assertIn("Dataset Inputs", summary)
             self.assertIn("Aligned Signal Dates", summary)
             self.assertIn("Portfolio Dates Prepared", summary)
+            self.assertIn("Annual Return", summary)
+            self.assertIn("Max Drawdown", summary)
 
     def test_constants_expose_expected_groups(self) -> None:
         self.assertIn("price", COLUMN_GROUPS)

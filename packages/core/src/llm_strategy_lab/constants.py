@@ -20,6 +20,7 @@ RANK = "rank"
 SIDE = "side"
 WEIGHT = "weight"
 TURNOVER = "turnover"
+HIT_RATIO = "hit_ratio"
 GROSS_EXPOSURE = "gross_exposure"
 NET_EXPOSURE = "net_exposure"
 EQUITY_CURVE = "equity_curve"
@@ -68,9 +69,10 @@ PORTFOLIO_COLUMNS = (
 BACKTEST_SERIES_COLUMNS = (
     DATE,
     RETURN,
-    FORWARD_RETURN,
     EQUITY_CURVE,
     DRAWDOWN,
+    TURNOVER,
+    HIT_RATIO,
     GROSS_EXPOSURE,
     NET_EXPOSURE,
 )

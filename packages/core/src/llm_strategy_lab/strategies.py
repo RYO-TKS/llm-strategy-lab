@@ -149,6 +149,13 @@ class PortfolioRecord:
         }
 
 
+@dataclass(frozen=True)
+class StrategyRunOutput:
+    signals: Tuple[SignalRecord, ...]
+    portfolio: Tuple[PortfolioRecord, ...]
+    explanation: JsonDict
+
+
 def _write_csv(path: Path, fieldnames: Sequence[str], rows: Iterable[JsonDict]) -> None:
     with path.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=fieldnames)
@@ -542,7 +549,13 @@ class Strategy(ABC):
         *,
         output_dir: Path,
     ) -> StrategyArtifact:
-        output_dir.mkdir(parents=True, exist_ok=True)
+        prepared = self.generate(dataset)
+        return self.write_artifacts(prepared, output_dir=output_dir)
+
+    def generate(
+        self,
+        dataset: PreparedResearchDataset,
+    ) -> StrategyRunOutput:
         signals = self.compute_signal(dataset)
         portfolio = self.build_portfolio(signals)
         explanation = self.explain(
@@ -550,6 +563,19 @@ class Strategy(ABC):
             signals=signals,
             portfolio=portfolio,
         )
+        return StrategyRunOutput(
+            signals=signals,
+            portfolio=portfolio,
+            explanation=explanation,
+        )
+
+    def write_artifacts(
+        self,
+        prepared: StrategyRunOutput,
+        *,
+        output_dir: Path,
+    ) -> StrategyArtifact:
+        output_dir.mkdir(parents=True, exist_ok=True)
 
         artifact_paths = {
             "signals": output_dir / f"{self.name}_signals.csv",
@@ -559,27 +585,27 @@ class Strategy(ABC):
         _write_csv(
             artifact_paths["signals"],
             SIGNAL_EXPORT_COLUMNS,
-            (row.to_dict() for row in signals),
+            (row.to_dict() for row in prepared.signals),
         )
         _write_csv(
             artifact_paths["portfolio"],
             PORTFOLIO_EXPORT_COLUMNS,
-            (row.to_dict() for row in portfolio),
+            (row.to_dict() for row in prepared.portfolio),
         )
         artifact_paths["explanation"].write_text(
-            json.dumps(explanation, ensure_ascii=False, indent=2) + "\n",
+            json.dumps(prepared.explanation, ensure_ascii=False, indent=2) + "\n",
             encoding="utf-8",
         )
 
-        signal_dates = sorted({row.signal_date for row in signals})
-        portfolio_dates = sorted({row.signal_date for row in portfolio})
+        signal_dates = sorted({row.signal_date for row in prepared.signals})
+        portfolio_dates = sorted({row.signal_date for row in prepared.portfolio})
         metadata = {
-            "signal_row_count": len(signals),
-            "portfolio_row_count": len(portfolio),
+            "signal_row_count": len(prepared.signals),
+            "portfolio_row_count": len(prepared.portfolio),
             "signal_dates": [value.isoformat() for value in signal_dates],
             "portfolio_dates": [value.isoformat() for value in portfolio_dates],
             "backtest_ready": True,
-            "explanation": explanation,
+            "explanation": prepared.explanation,
         }
         return StrategyArtifact(
             strategy_name=self.name,
@@ -587,7 +613,7 @@ class Strategy(ABC):
             signal_columns=SIGNAL_EXPORT_COLUMNS,
             parameter_snapshot=dict(self.config.params),
             artifact_paths=artifact_paths,
-            explanation=explanation.get("summary"),
+            explanation=prepared.explanation.get("summary"),
             metadata=metadata,
         )
 

@@ -9,9 +9,9 @@ Phase 1 では、次の 4 要素を最小動作品として揃えます。
 
 ## 現時点の前提
 
-このリポジトリは、まず運用ファイルとディレクトリ責務を固定するためのスキャフォールドです。
-`make run-sample` は現時点で aligned dataset と MOM ベースライン戦略の signal / portfolio artifact を出力します。
-ただしバックテスト metrics と chart 類はまだ未実装です。
+このリポジトリは、Issue 駆動で最小構成を拡張していく研究基盤です。
+`make run-sample` は現時点で aligned dataset、MOM ベースライン戦略の signal / portfolio artifact、日次バックテスト series、metrics JSON を出力します。
+chart 類と transaction cost を加味した評価はまだ未実装です。
 PCA 系の実装メモは [pca-subspace-notes.md](pca-subspace-notes.md) に残します。
 
 ## Phase 1 で満たすべきこと

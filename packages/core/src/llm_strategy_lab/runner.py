@@ -1,4 +1,4 @@
-"""Strategy preview runner used during repository bootstrap."""
+"""Experiment runner that materializes aligned data, strategy artifacts, and backtests."""
 
 from __future__ import annotations
 
@@ -7,6 +7,7 @@ import logging
 from datetime import datetime, timezone
 from pathlib import Path
 
+from .backtest import run_daily_backtest
 from .config import load_experiment_config
 from .data_pipeline import prepare_aligned_research_dataset
 from .models import ExperimentConfig, RunRecord, RunStatus
@@ -56,9 +57,24 @@ def _build_summary(config: ExperimentConfig, run_record: RunRecord) -> str:
             strategy_metadata.get("portfolio_row_count", "n/a")
         )
 
+    annual_return = "n/a"
+    annual_risk = "n/a"
+    return_risk_ratio = "n/a"
+    max_drawdown = "n/a"
+    average_turnover = "n/a"
+    hit_ratio = "n/a"
+    if run_record.backtest_result is not None:
+        metrics = run_record.backtest_result.metrics
+        annual_return = f"{metrics.get('annual_return', 0.0):.6f}"
+        annual_risk = f"{metrics.get('annual_risk', 0.0):.6f}"
+        return_risk_ratio = f"{metrics.get('return_risk_ratio', 0.0):.6f}"
+        max_drawdown = f"{metrics.get('max_drawdown', 0.0):.6f}"
+        average_turnover = f"{metrics.get('average_turnover', 0.0):.6f}"
+        hit_ratio = f"{metrics.get('hit_ratio', 0.0):.6f}"
+
     return "\n".join(
         [
-            "# Strategy Preview Run",
+            "# Research Run",
             "",
             f"- Run ID: `{run_record.run_id}`",
             f"- Experiment: `{config.experiment_id}`",
@@ -70,18 +86,24 @@ def _build_summary(config: ExperimentConfig, run_record: RunRecord) -> str:
             f"- Data Quality Events: `{quality_event_count}`",
             f"- Portfolio Dates Prepared: `{portfolio_dates_prepared}`",
             f"- Portfolio Rows Prepared: `{portfolio_rows_prepared}`",
+            f"- Annual Return: `{annual_return}`",
+            f"- Annual Risk: `{annual_risk}`",
+            f"- Return/Risk: `{return_risk_ratio}`",
+            f"- Max Drawdown: `{max_drawdown}`",
+            f"- Average Turnover: `{average_turnover}`",
+            f"- Hit Ratio: `{hit_ratio}`",
             "",
             (
                 "This run confirms that typed config loading, market data ingestion, "
-                "trading-day alignment, and baseline strategy artifact output are in place."
+                "trading-day alignment, strategy artifact output, and the shared daily "
+                "backtest layer are wired end-to-end."
             ),
-            "It does not execute the backtest engine or evaluation metrics yet.",
             "",
             "## Next Steps",
             "",
-            "1. Add the remaining PCA-based strategies on the same interface.",
-            "2. Connect the standardized portfolio output to the backtest layer.",
-            "3. Persist metrics and charts in this run directory.",
+            "1. Add chart generation and strategy-comparison reports.",
+            "2. Extend metrics with transaction-cost and slippage assumptions.",
+            "3. Feed the standardized metrics into the LLM evaluation loop.",
             "",
         ]
     )
@@ -102,6 +124,7 @@ def create_scaffold_run(config_path: Path, output_root: Path | None = None) -> P
     started_at_utc = datetime.now(timezone.utc)
     data_alignment_summary = None
     strategy_artifacts = ()
+    backtest_result = None
     if config.dataset is not None:
         prepared_dataset = prepare_aligned_research_dataset(
             config.dataset,
@@ -111,7 +134,19 @@ def create_scaffold_run(config_path: Path, output_root: Path | None = None) -> P
         )
         data_alignment_summary = prepared_dataset.summary()
         strategy = create_strategy(config.strategy)
-        strategy_artifacts = (strategy.run(prepared_dataset, output_dir=run_dir),)
+        prepared_strategy = strategy.generate(prepared_dataset)
+        strategy_artifact = strategy.write_artifacts(
+            prepared_strategy,
+            output_dir=run_dir,
+        )
+        backtest_result = run_daily_backtest(
+            strategy_name=strategy.name,
+            dataset=prepared_dataset,
+            portfolio=prepared_strategy.portfolio,
+            backtest=config.backtest,
+            output_dir=run_dir,
+        )
+        strategy_artifacts = (strategy_artifact,)
 
     run_record = RunRecord(
         run_id=run_dir.name,
@@ -120,14 +155,16 @@ def create_scaffold_run(config_path: Path, output_root: Path | None = None) -> P
         strategy_name=config.strategy.name,
         config_path=config.config_path,
         output_dir=run_dir,
-        status=RunStatus.SCAFFOLD,
+        status=RunStatus.SUCCEEDED,
         started_at_utc=started_at_utc,
+        finished_at_utc=datetime.now(timezone.utc),
         notes=config.notes,
         message=(
-            "Aligned data ingestion and baseline strategy artifacts are ready. "
-            "Implement the shared backtest engine next."
+            "Aligned data ingestion, standardized strategy artifacts, and daily "
+            "backtest metrics completed successfully."
         ),
         strategy_artifacts=strategy_artifacts,
+        backtest_result=backtest_result,
         metadata={
             "environment_config": config.environment.to_dict(),
             "strategy_config": config.strategy.to_dict(),
