@@ -23,8 +23,8 @@ lint: ## Run Ruff and syntax checks
 test: ## Run unit tests
 	PYTHONPATH=packages/core/src $(PYTEST)
 
-run-sample: ## Run the strategy preview experiment runner
-	PYTHONPATH=packages/core/src $(BIN)/python -m llm_strategy_lab.cli --config configs/experiments/sample_research.yaml
+run-sample: ## Run the bundled sample experiment from the CLI
+	PYTHONPATH=packages/core/src $(BIN)/python -m llm_strategy_lab.cli sample
 
 clean: ## Remove local caches and build outputs
 	rm -rf $(VENV) .pytest_cache .ruff_cache .mypy_cache .coverage htmlcov build dist

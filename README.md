@@ -27,7 +27,15 @@ make test
 make run-sample
 ```
 
-`make run-sample` は現時点で MOM ベースライン戦略の signal / portfolio artifact に加えて、
+CLI からは次で再現できます。
+
+```bash
+llm-strategy-lab sample
+llm-strategy-lab run --config configs/experiments/sample_research.yaml
+llm-strategy-lab run --config configs/experiments/sample_research.yaml --strategy pca_sub
+```
+
+`make run-sample` は `llm-strategy-lab sample` のショートカットで、現時点で MOM ベースライン戦略の signal / portfolio artifact に加えて、
 日次 backtest、metrics JSON、FF3 / Carhart4 回帰 JSON、equity curve / drawdown / cumulative IC の SVG を `runs/` に生成します。
 transaction cost を加味した評価は M1 の後続 Issue で進めます。
 実装済みの戦略インターフェースは `mom`, `pca_plain`, `pca_sub`, `double` で、sample 設定は現時点では `mom` を参照しています。

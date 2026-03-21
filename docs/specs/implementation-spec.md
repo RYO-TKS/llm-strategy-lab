@@ -11,6 +11,7 @@ Phase 1 では、次の 4 要素を最小動作品として揃えます。
 
 このリポジトリは、Issue 駆動で最小構成を拡張していく研究基盤です。
 `make run-sample` は現時点で aligned dataset、MOM ベースライン戦略の signal / portfolio artifact、日次バックテスト series、metrics JSON、FF3 / Carhart4 回帰 JSON、主要 SVG チャートを出力します。
+CLI は `llm-strategy-lab run --config ...` と `llm-strategy-lab sample` を持ち、`--strategy` による戦略差し替えをサポートします。
 transaction cost を加味した評価はまだ未実装です。
 PCA 系の実装メモは [pca-subspace-notes.md](pca-subspace-notes.md) に残します。
 

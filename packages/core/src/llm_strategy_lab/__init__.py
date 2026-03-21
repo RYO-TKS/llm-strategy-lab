@@ -15,6 +15,7 @@ from .models import (
     StrategyArtifact,
     StrategyConfig,
 )
+from .runner import run_experiment
 from .strategies import (
     DoubleSortStrategy,
     MomentumStrategy,
@@ -41,6 +42,7 @@ __all__ = [
     "create_strategy",
     "run_daily_backtest",
     "run_backtest_evaluation",
+    "run_experiment",
     "load_experiment_config",
     "prepare_aligned_research_dataset",
 ]
