@@ -182,6 +182,44 @@ class CliTests(unittest.TestCase):
             },
         )
 
+    def test_main_runs_loop_subcommand(self) -> None:
+        loop_dir = Path("/tmp/runs/loops/sample_research/0001")
+        with patch(
+            "llm_strategy_lab.cli.run_improvement_loop",
+            return_value=loop_dir,
+        ) as mock_loop:
+            stdout = io.StringIO()
+            with redirect_stdout(stdout):
+                result = main(
+                    [
+                        "loop",
+                        "--comparison",
+                        "runs/comparisons/sample_research-0001-to-0002",
+                        "--max-iterations",
+                        "2",
+                        "--no-improvement-limit",
+                        "1",
+                    ]
+                )
+
+        self.assertEqual(result, 0)
+        self.assertIn(str(loop_dir), stdout.getvalue())
+        self.assertEqual(
+            mock_loop.call_args.kwargs,
+            {
+                "comparison_reference": Path("runs/comparisons/sample_research-0001-to-0002"),
+                "parent_run": None,
+                "candidate_run": None,
+                "output_root": None,
+                "max_iterations": 2,
+                "no_improvement_limit": 1,
+                "min_annual_return_delta": 0.0,
+                "min_return_risk_ratio_delta": 0.0,
+                "max_drawdown_increase": 0.0,
+                "max_turnover_increase": 0.0,
+            },
+        )
+
     def test_main_supports_legacy_config_arguments(self) -> None:
         run_dir = Path("/tmp/runs/sample_research/0002")
         with patch(
