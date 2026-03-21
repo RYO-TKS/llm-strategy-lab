@@ -9,6 +9,7 @@ from typing import Sequence
 
 from .comparison import compare_runs
 from .config import find_project_root
+from .proposals import build_prompt_bundle, validate_and_save_proposal
 from .runner import run_experiment
 
 STRATEGY_CHOICES = ("mom", "pca_plain", "pca_sub", "double")
@@ -77,6 +78,41 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Optional override for the comparison artifact root directory.",
     )
+
+    prompt_bundle_parser = subparsers.add_parser(
+        "prompt-bundle",
+        help="Generate an LLM prompt bundle and proposal schema from a comparison.",
+    )
+    prompt_bundle_parser.add_argument(
+        "--comparison",
+        required=True,
+        help="Path to the comparison directory or comparison_manifest.json.",
+    )
+    prompt_bundle_parser.add_argument(
+        "--output-root",
+        default=None,
+        help="Optional override for the prompt bundle output directory.",
+    )
+
+    validate_proposal_parser = subparsers.add_parser(
+        "validate-proposal",
+        help="Validate a proposal JSON against the generated proposal schema.",
+    )
+    validate_proposal_parser.add_argument(
+        "--comparison",
+        required=True,
+        help="Path to the comparison directory or comparison_manifest.json.",
+    )
+    validate_proposal_parser.add_argument(
+        "--proposal-file",
+        required=True,
+        help="Path to the proposal JSON file to validate.",
+    )
+    validate_proposal_parser.add_argument(
+        "--output-root",
+        default=None,
+        help="Optional override for the validated proposal output directory.",
+    )
     return parser
 
 
@@ -130,13 +166,32 @@ def _compare_from_namespace(args: argparse.Namespace) -> int:
     return 0
 
 
+def _build_prompt_bundle_from_namespace(args: argparse.Namespace) -> int:
+    bundle_path = build_prompt_bundle(
+        comparison_reference=Path(args.comparison),
+        output_root=Path(args.output_root) if args.output_root else None,
+    )
+    print(f"Prompt bundle created at: {bundle_path}")
+    return 0
+
+
+def _validate_proposal_from_namespace(args: argparse.Namespace) -> int:
+    proposal_artifact_path = validate_and_save_proposal(
+        comparison_reference=Path(args.comparison),
+        proposal_file=Path(args.proposal_file),
+        output_root=Path(args.output_root) if args.output_root else None,
+    )
+    print(f"Validated proposal saved at: {proposal_artifact_path}")
+    return 0
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     args_list = list(argv) if argv is not None else sys.argv[1:]
     if not args_list:
         build_parser().print_help()
         return 2
 
-    if args_list[0] in {"run", "sample", "compare"}:
+    if args_list[0] in {"run", "sample", "compare", "prompt-bundle", "validate-proposal"}:
         parser = build_parser()
         args = parser.parse_args(args_list)
         if args.command == "run":
@@ -145,6 +200,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             return _run_from_namespace(args, config_path=resolve_sample_config_path())
         if args.command == "compare":
             return _compare_from_namespace(args)
+        if args.command == "prompt-bundle":
+            return _build_prompt_bundle_from_namespace(args)
+        if args.command == "validate-proposal":
+            return _validate_proposal_from_namespace(args)
         parser.print_help()
         return 2
 
