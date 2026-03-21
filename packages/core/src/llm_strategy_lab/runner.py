@@ -10,6 +10,7 @@ from pathlib import Path
 from .backtest import run_daily_backtest
 from .config import load_experiment_config
 from .data_pipeline import prepare_aligned_research_dataset
+from .evaluation import run_backtest_evaluation
 from .models import ExperimentConfig, RunRecord, RunStatus
 from .strategies import create_strategy
 
@@ -63,6 +64,10 @@ def _build_summary(config: ExperimentConfig, run_record: RunRecord) -> str:
     max_drawdown = "n/a"
     average_turnover = "n/a"
     hit_ratio = "n/a"
+    ff3_status = "n/a"
+    carhart4_status = "n/a"
+    chart_count = "0"
+    cumulative_rank_ic = "n/a"
     if run_record.backtest_result is not None:
         metrics = run_record.backtest_result.metrics
         annual_return = f"{metrics.get('annual_return', 0.0):.6f}"
@@ -71,6 +76,17 @@ def _build_summary(config: ExperimentConfig, run_record: RunRecord) -> str:
         max_drawdown = f"{metrics.get('max_drawdown', 0.0):.6f}"
         average_turnover = f"{metrics.get('average_turnover', 0.0):.6f}"
         hit_ratio = f"{metrics.get('hit_ratio', 0.0):.6f}"
+        metadata = run_record.backtest_result.metadata
+        factor_statuses = metadata.get("factor_regression_statuses", {})
+        if isinstance(factor_statuses, dict):
+            ff3_status = str(factor_statuses.get("ff3", "n/a"))
+            carhart4_status = str(factor_statuses.get("carhart4", "n/a"))
+        chart_paths = metadata.get("chart_paths", {})
+        if isinstance(chart_paths, dict):
+            chart_count = str(len(chart_paths))
+        signal_ic_summary = metadata.get("signal_ic_summary", {})
+        if isinstance(signal_ic_summary, dict):
+            cumulative_rank_ic = f"{signal_ic_summary.get('final_cumulative_rank_ic', 0.0):.6f}"
 
     return "\n".join(
         [
@@ -92,18 +108,22 @@ def _build_summary(config: ExperimentConfig, run_record: RunRecord) -> str:
             f"- Max Drawdown: `{max_drawdown}`",
             f"- Average Turnover: `{average_turnover}`",
             f"- Hit Ratio: `{hit_ratio}`",
+            f"- FF3 Regression: `{ff3_status}`",
+            f"- Carhart4 Regression: `{carhart4_status}`",
+            f"- Charts Saved: `{chart_count}`",
+            f"- Final Cumulative Rank IC: `{cumulative_rank_ic}`",
             "",
             (
                 "This run confirms that typed config loading, market data ingestion, "
-                "trading-day alignment, strategy artifact output, and the shared daily "
-                "backtest layer are wired end-to-end."
+                "trading-day alignment, strategy artifact output, the shared daily "
+                "backtest layer, factor regressions, and chart generation are wired end-to-end."
             ),
             "",
             "## Next Steps",
             "",
-            "1. Add chart generation and strategy-comparison reports.",
-            "2. Extend metrics with transaction-cost and slippage assumptions.",
-            "3. Feed the standardized metrics into the LLM evaluation loop.",
+            "1. Add transaction-cost and slippage assumptions to the return series.",
+            "2. Compare multiple runs side-by-side from the CLI.",
+            "3. Feed the standardized metrics and charts into the LLM evaluation loop.",
             "",
         ]
     )
@@ -146,6 +166,14 @@ def create_scaffold_run(config_path: Path, output_root: Path | None = None) -> P
             backtest=config.backtest,
             output_dir=run_dir,
         )
+        backtest_result = run_backtest_evaluation(
+            strategy_name=strategy.name,
+            dataset=prepared_dataset,
+            signals=prepared_strategy.signals,
+            backtest_result=backtest_result,
+            factor_path=config.dataset.factor_returns if config.dataset else None,
+            output_dir=run_dir,
+        )
         strategy_artifacts = (strategy_artifact,)
 
     run_record = RunRecord(
@@ -160,8 +188,9 @@ def create_scaffold_run(config_path: Path, output_root: Path | None = None) -> P
         finished_at_utc=datetime.now(timezone.utc),
         notes=config.notes,
         message=(
-            "Aligned data ingestion, standardized strategy artifacts, and daily "
-            "backtest metrics completed successfully."
+            "Aligned data ingestion, standardized strategy artifacts, daily "
+            "backtest metrics, factor regressions, and chart artifacts completed "
+            "successfully."
         ),
         strategy_artifacts=strategy_artifacts,
         backtest_result=backtest_result,

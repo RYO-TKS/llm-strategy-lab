@@ -44,6 +44,10 @@ class DatasetConfig:
     def trading_calendar(self) -> Optional[Path]:
         return self.inputs.get("trading_calendar")
 
+    @property
+    def factor_returns(self) -> Optional[Path]:
+        return self.inputs.get("factor_returns")
+
     def to_dict(self) -> JsonDict:
         return _path_mapping_to_strings(self.inputs)
 
