@@ -23,7 +23,7 @@ make run-sample
 ```
 
 `make run-sample` は `configs/experiments/sample_research.yaml` を読み込み、`runs/` に MOM ベースライン戦略の signal / portfolio 成果物を生成します。
-`pca_plain` も同じ strategy interface で追加済みですが、sample 設定は現時点では `mom` を使います。
+`pca_plain` と `pca_sub` も同じ strategy interface で追加済みですが、sample 設定は現時点では `mom` を使います。
 
 ## GitHub 側の作業
 

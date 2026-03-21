@@ -1,7 +1,8 @@
 name: pca_sub
-lookback_window: 60
-quantile: 0.3
-regularization: 0.001
+q: 0.3
+rolling_window: 5
+components: 3
+regularization: 0.1
 subspace:
   - global
   - country_spread
