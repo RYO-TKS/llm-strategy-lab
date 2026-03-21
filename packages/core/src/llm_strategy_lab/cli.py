@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 from typing import Sequence
 
+from .child_runs import create_child_run
 from .comparison import compare_runs
 from .config import find_project_root
 from .proposals import build_prompt_bundle, validate_and_save_proposal
@@ -113,6 +114,26 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Optional override for the validated proposal output directory.",
     )
+
+    child_run_parser = subparsers.add_parser(
+        "child-run",
+        help="Validate a proposal and materialize the next child run from it.",
+    )
+    child_run_parser.add_argument(
+        "--comparison",
+        required=True,
+        help="Path to the comparison directory or comparison_manifest.json.",
+    )
+    child_run_parser.add_argument(
+        "--proposal-file",
+        required=True,
+        help="Path to the proposal JSON file to validate and apply.",
+    )
+    child_run_parser.add_argument(
+        "--output-root",
+        default=None,
+        help="Optional override for the child run output root directory.",
+    )
     return parser
 
 
@@ -185,13 +206,30 @@ def _validate_proposal_from_namespace(args: argparse.Namespace) -> int:
     return 0
 
 
+def _create_child_run_from_namespace(args: argparse.Namespace) -> int:
+    child_run_dir = create_child_run(
+        comparison_reference=Path(args.comparison),
+        proposal_file=Path(args.proposal_file),
+        output_root=Path(args.output_root) if args.output_root else None,
+    )
+    print(f"Child run created at: {child_run_dir}")
+    return 0
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     args_list = list(argv) if argv is not None else sys.argv[1:]
     if not args_list:
         build_parser().print_help()
         return 2
 
-    if args_list[0] in {"run", "sample", "compare", "prompt-bundle", "validate-proposal"}:
+    if args_list[0] in {
+        "run",
+        "sample",
+        "compare",
+        "prompt-bundle",
+        "validate-proposal",
+        "child-run",
+    }:
         parser = build_parser()
         args = parser.parse_args(args_list)
         if args.command == "run":
@@ -204,6 +242,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             return _build_prompt_bundle_from_namespace(args)
         if args.command == "validate-proposal":
             return _validate_proposal_from_namespace(args)
+        if args.command == "child-run":
+            return _create_child_run_from_namespace(args)
         parser.print_help()
         return 2
 

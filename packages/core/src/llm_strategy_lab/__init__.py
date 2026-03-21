@@ -1,6 +1,7 @@
 """Core package for llm-strategy-lab."""
 
 from .backtest import run_daily_backtest
+from .child_runs import create_child_run
 from .comparison import compare_runs
 from .config import load_experiment_config
 from .data_pipeline import prepare_aligned_research_dataset
@@ -51,6 +52,7 @@ __all__ = [
     "create_strategy",
     "run_daily_backtest",
     "run_backtest_evaluation",
+    "create_child_run",
     "compare_runs",
     "build_prompt_bundle",
     "run_experiment",

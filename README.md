@@ -36,6 +36,7 @@ llm-strategy-lab run --config configs/experiments/sample_research.yaml --strateg
 llm-strategy-lab compare --parent-run runs/sample_research/0016 --candidate-run runs/sample_research/0017
 llm-strategy-lab prompt-bundle --comparison runs/comparisons/sample_research-0016-to-0017
 llm-strategy-lab validate-proposal --comparison runs/comparisons/sample_research-0016-to-0017 --proposal-file tmp/proposal.json
+llm-strategy-lab child-run --comparison runs/comparisons/sample_research-0016-to-0017 --proposal-file tmp/proposal.json
 ```
 
 `make run-sample` は `llm-strategy-lab sample` のショートカットで、現時点で MOM ベースライン戦略の signal / portfolio artifact に加えて、
@@ -46,6 +47,7 @@ sample データは CLI override で `pca_plain` と `pca_sub` を回しても s
 `llm-strategy-lab compare` は 2 つの completed run を比較し、`runs/comparisons/{lineage_id}/` に comparison manifest と Markdown summary を保存します。
 `llm-strategy-lab prompt-bundle` は comparison artifact から `prompt_bundle.json` と `proposal_schema.json` を生成します。
 `llm-strategy-lab validate-proposal` は proposal JSON を schema で検証し、valid な場合だけ `proposal_artifact.json` を保存します。
+`llm-strategy-lab child-run` は validated proposal を parent run に適用し、child 側の run directory に `child_config_snapshot.yaml` を残したうえで実行し、manifest に parent / proposal / lineage 参照を保存します。
 
 ## GitHub 運用
 

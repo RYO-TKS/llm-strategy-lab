@@ -195,9 +195,17 @@ def load_backtest_config(raw_backtest: Any) -> BacktestConfig:
     )
 
 
-def load_experiment_config(config_path: Path) -> ExperimentConfig:
+def load_experiment_config(
+    config_path: Path,
+    *,
+    project_root: Optional[Path] = None,
+) -> ExperimentConfig:
     resolved_config_path = config_path.resolve()
-    project_root = find_project_root(resolved_config_path)
+    resolved_project_root = (
+        project_root.resolve()
+        if project_root is not None
+        else find_project_root(resolved_config_path)
+    )
     experiment_mapping = load_yaml_mapping(resolved_config_path)
 
     missing = sorted(REQUIRED_EXPERIMENT_KEYS - experiment_mapping.keys())
@@ -217,7 +225,7 @@ def load_experiment_config(config_path: Path) -> ExperimentConfig:
         dataset = load_dataset_config(
             experiment_mapping["dataset"],
             config_path=resolved_config_path,
-            project_root=project_root,
+            project_root=resolved_project_root,
         )
 
     return ExperimentConfig(
@@ -225,17 +233,17 @@ def load_experiment_config(config_path: Path) -> ExperimentConfig:
         environment=load_environment_config(
             experiment_mapping["environment"],
             config_path=resolved_config_path,
-            project_root=project_root,
+            project_root=resolved_project_root,
         ),
         strategy=load_strategy_config(
             experiment_mapping["strategy"],
             config_path=resolved_config_path,
-            project_root=project_root,
+            project_root=resolved_project_root,
         ),
         dataset=dataset,
         backtest=load_backtest_config(experiment_mapping["backtest"]),
         notes=tuple(str(note) for note in notes_sequence),
         config_path=resolved_config_path,
-        project_root=project_root,
+        project_root=resolved_project_root,
         raw=experiment_mapping,
     )

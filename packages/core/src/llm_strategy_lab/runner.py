@@ -12,7 +12,7 @@ from .backtest import run_daily_backtest
 from .config import load_experiment_config, load_strategy_config
 from .data_pipeline import prepare_aligned_research_dataset
 from .evaluation import run_backtest_evaluation
-from .models import ExperimentConfig, RunRecord, RunStatus
+from .models import ExperimentConfig, JsonDict, RunRecord, RunStatus
 from .strategies import create_strategy
 
 
@@ -169,29 +169,19 @@ def _build_summary(config: ExperimentConfig, run_record: RunRecord) -> str:
     )
 
 
-def run_experiment(
-    config_path: Path,
-    output_root: Path | None = None,
+def _execute_loaded_experiment(
+    config: ExperimentConfig,
     *,
-    strategy_name: str | None = None,
-    strategy_params_file: Path | None = None,
+    run_dir: Path,
+    cli_overrides: JsonDict,
+    resolved_output_root: Path | None = None,
+    extra_metadata: JsonDict | None = None,
 ) -> Path:
-    config = load_experiment_config(config_path)
-    config = _apply_strategy_override(
-        config,
-        strategy_name=strategy_name,
-        strategy_params_file=strategy_params_file,
-    )
     logging.basicConfig(
         level=getattr(logging, config.environment.log_level.upper(), logging.INFO),
         format="%(levelname)s %(name)s: %(message)s",
     )
     logger = logging.getLogger(__name__)
-    resolved_output_root = output_root.resolve() if output_root else config.environment.output_root
-    run_dir = next_run_directory(
-        output_root=resolved_output_root,
-        experiment_id=config.experiment_id,
-    )
     started_at_utc = datetime.now(timezone.utc)
     data_alignment_summary = None
     strategy_artifacts = ()
@@ -227,6 +217,21 @@ def run_experiment(
         )
         strategy_artifacts = (strategy_artifact,)
 
+    environment_config = config.environment.to_dict()
+    if resolved_output_root is not None:
+        environment_config["output_root"] = str(resolved_output_root.resolve())
+
+    metadata: JsonDict = {
+        "environment_config": environment_config,
+        "strategy_config": config.strategy.to_dict(),
+        "dataset_config": config.dataset.to_dict() if config.dataset else None,
+        "backtest_config": config.backtest.to_dict(),
+        "cli_overrides": dict(cli_overrides),
+        "data_alignment": data_alignment_summary,
+    }
+    if extra_metadata:
+        metadata.update(extra_metadata)
+
     run_record = RunRecord(
         run_id=run_dir.name,
         experiment_id=config.experiment_id,
@@ -245,19 +250,7 @@ def run_experiment(
         ),
         strategy_artifacts=strategy_artifacts,
         backtest_result=backtest_result,
-        metadata={
-            "environment_config": config.environment.to_dict(),
-            "strategy_config": config.strategy.to_dict(),
-            "dataset_config": config.dataset.to_dict() if config.dataset else None,
-            "backtest_config": config.backtest.to_dict(),
-            "cli_overrides": {
-                "strategy_name": strategy_name,
-                "strategy_params_file": (
-                    str(strategy_params_file.resolve()) if strategy_params_file else None
-                ),
-            },
-            "data_alignment": data_alignment_summary,
-        },
+        metadata=metadata,
     )
     manifest = run_record.to_dict()
     summary = _build_summary(config, run_record)
@@ -268,6 +261,37 @@ def run_experiment(
     )
     (run_dir / "SUMMARY.md").write_text(summary, encoding="utf-8")
     return run_dir
+
+
+def run_experiment(
+    config_path: Path,
+    output_root: Path | None = None,
+    *,
+    strategy_name: str | None = None,
+    strategy_params_file: Path | None = None,
+) -> Path:
+    config = load_experiment_config(config_path)
+    config = _apply_strategy_override(
+        config,
+        strategy_name=strategy_name,
+        strategy_params_file=strategy_params_file,
+    )
+    resolved_output_root = output_root.resolve() if output_root else config.environment.output_root
+    run_dir = next_run_directory(
+        output_root=resolved_output_root,
+        experiment_id=config.experiment_id,
+    )
+    return _execute_loaded_experiment(
+        config,
+        run_dir=run_dir,
+        cli_overrides={
+            "strategy_name": strategy_name,
+            "strategy_params_file": (
+                str(strategy_params_file.resolve()) if strategy_params_file else None
+            ),
+        },
+        resolved_output_root=resolved_output_root,
+    )
 
 
 def create_scaffold_run(config_path: Path, output_root: Path | None = None) -> Path:

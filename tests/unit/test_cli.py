@@ -153,6 +153,35 @@ class CliTests(unittest.TestCase):
             },
         )
 
+    def test_main_runs_child_run_subcommand(self) -> None:
+        child_run_dir = Path("/tmp/runs/sample_research/0003")
+        with patch(
+            "llm_strategy_lab.cli.create_child_run",
+            return_value=child_run_dir,
+        ) as mock_child_run:
+            stdout = io.StringIO()
+            with redirect_stdout(stdout):
+                result = main(
+                    [
+                        "child-run",
+                        "--comparison",
+                        "runs/comparisons/sample_research-0001-to-0002",
+                        "--proposal-file",
+                        "tmp/proposal.json",
+                    ]
+                )
+
+        self.assertEqual(result, 0)
+        self.assertIn(str(child_run_dir), stdout.getvalue())
+        self.assertEqual(
+            mock_child_run.call_args.kwargs,
+            {
+                "comparison_reference": Path("runs/comparisons/sample_research-0001-to-0002"),
+                "proposal_file": Path("tmp/proposal.json"),
+                "output_root": None,
+            },
+        )
+
     def test_main_supports_legacy_config_arguments(self) -> None:
         run_dir = Path("/tmp/runs/sample_research/0002")
         with patch(
