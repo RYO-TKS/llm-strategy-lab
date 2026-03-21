@@ -39,6 +39,7 @@ llm-strategy-lab run --config configs/experiments/sample_research.yaml --strateg
 日次 backtest、metrics JSON、FF3 / Carhart4 回帰 JSON、equity curve / drawdown / cumulative IC の SVG を `runs/` に生成します。
 transaction cost を加味した評価は M1 の後続 Issue で進めます。
 実装済みの戦略インターフェースは `mom`, `pca_plain`, `pca_sub`, `double` で、sample 設定は現時点では `mom` を参照しています。
+sample データは CLI override で `pca_plain` と `pca_sub` を回しても signal / backtest が空にならない長さにしてあります。
 
 ## GitHub 運用
 
