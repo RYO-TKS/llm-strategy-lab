@@ -1,5 +1,6 @@
 """Core package for llm-strategy-lab."""
 
+from .backtest import run_daily_backtest
 from .config import load_experiment_config
 from .data_pipeline import prepare_aligned_research_dataset
 from .models import (
@@ -37,6 +38,7 @@ __all__ = [
     "PlainPCAStrategy",
     "SubspacePCAStrategy",
     "create_strategy",
+    "run_daily_backtest",
     "load_experiment_config",
     "prepare_aligned_research_dataset",
 ]
