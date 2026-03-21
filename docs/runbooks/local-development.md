@@ -26,6 +26,7 @@ llm-strategy-lab compare --parent-run runs/sample_research/0016 --candidate-run 
 llm-strategy-lab prompt-bundle --comparison runs/comparisons/sample_research-0016-to-0017
 llm-strategy-lab validate-proposal --comparison runs/comparisons/sample_research-0016-to-0017 --proposal-file tmp/proposal.json
 llm-strategy-lab child-run --comparison runs/comparisons/sample_research-0016-to-0017 --proposal-file tmp/proposal.json
+llm-strategy-lab loop --parent-run runs/sample_research/0016 --candidate-run runs/sample_research/0017 --max-iterations 1
 ```
 
 `make run-sample` は `llm-strategy-lab sample` を呼び、`runs/` に `runs/{experiment_id}/{iteration}` 構造で成果物を保存します。
@@ -36,6 +37,7 @@ sample 実行では MOM ベースライン戦略の signal / portfolio 成果物
 `llm-strategy-lab prompt-bundle` は comparison から LLM 入力用の `prompt_bundle.json` と `proposal_schema.json` を生成します。
 `llm-strategy-lab validate-proposal` は proposal JSON を schema で検証し、invalid proposal は弾いて `proposal_validation.json` に理由を残し、valid proposal だけ `proposal_artifact.json` に保存します。
 `llm-strategy-lab child-run` は proposal を再検証して parent run ベースの child config snapshot を生成し、`child_config_snapshot.yaml` を child run directory に保存したうえで実験を実行し、manifest に lineage 参照を残します。
+`llm-strategy-lab loop` は auto proposal 生成、child run 実行、baseline 比較、quality gate 判定をまとめて実行し、`runs/loops/{experiment_id}/{iteration}` に loop manifest と iteration artifact を保存します。
 
 ## GitHub 側の作業
 

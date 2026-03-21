@@ -6,6 +6,7 @@ from .comparison import compare_runs
 from .config import load_experiment_config
 from .data_pipeline import prepare_aligned_research_dataset
 from .evaluation import run_backtest_evaluation
+from .loop_executor import run_improvement_loop
 from .models import (
     BacktestConfig,
     BacktestResult,
@@ -55,6 +56,7 @@ __all__ = [
     "create_child_run",
     "compare_runs",
     "build_prompt_bundle",
+    "run_improvement_loop",
     "run_experiment",
     "load_experiment_config",
     "prepare_aligned_research_dataset",

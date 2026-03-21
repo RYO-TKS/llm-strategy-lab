@@ -10,6 +10,7 @@ from typing import Sequence
 from .child_runs import create_child_run
 from .comparison import compare_runs
 from .config import find_project_root
+from .loop_executor import run_improvement_loop
 from .proposals import build_prompt_bundle, validate_and_save_proposal
 from .runner import run_experiment
 
@@ -134,6 +135,67 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Optional override for the child run output root directory.",
     )
+
+    loop_parser = subparsers.add_parser(
+        "loop",
+        help="Run the iterative proposal -> child run -> comparison loop.",
+    )
+    loop_parser.add_argument(
+        "--comparison",
+        default=None,
+        help="Optional path to the comparison directory or comparison_manifest.json.",
+    )
+    loop_parser.add_argument(
+        "--parent-run",
+        default=None,
+        help="Optional path to the parent/baseline run directory or manifest.json.",
+    )
+    loop_parser.add_argument(
+        "--candidate-run",
+        default=None,
+        help="Optional path to the candidate run directory or manifest.json.",
+    )
+    loop_parser.add_argument(
+        "--output-root",
+        default=None,
+        help="Optional override for the loop and child run output root directory.",
+    )
+    loop_parser.add_argument(
+        "--max-iterations",
+        type=int,
+        default=3,
+        help="Maximum number of loop iterations to execute.",
+    )
+    loop_parser.add_argument(
+        "--no-improvement-limit",
+        type=int,
+        default=1,
+        help="Stop after this many consecutive rejected iterations.",
+    )
+    loop_parser.add_argument(
+        "--min-annual-return-delta",
+        type=float,
+        default=0.0,
+        help="Minimum annual_return delta required for acceptance.",
+    )
+    loop_parser.add_argument(
+        "--min-return-risk-ratio-delta",
+        type=float,
+        default=0.0,
+        help="Minimum return_risk_ratio delta required for acceptance.",
+    )
+    loop_parser.add_argument(
+        "--max-drawdown-increase",
+        type=float,
+        default=0.0,
+        help="Maximum allowed max_drawdown increase for acceptance.",
+    )
+    loop_parser.add_argument(
+        "--max-turnover-increase",
+        type=float,
+        default=0.0,
+        help="Maximum allowed average_turnover increase for acceptance.",
+    )
     return parser
 
 
@@ -216,6 +278,23 @@ def _create_child_run_from_namespace(args: argparse.Namespace) -> int:
     return 0
 
 
+def _run_loop_from_namespace(args: argparse.Namespace) -> int:
+    loop_dir = run_improvement_loop(
+        comparison_reference=Path(args.comparison) if args.comparison else None,
+        parent_run=Path(args.parent_run) if args.parent_run else None,
+        candidate_run=Path(args.candidate_run) if args.candidate_run else None,
+        output_root=Path(args.output_root) if args.output_root else None,
+        max_iterations=args.max_iterations,
+        no_improvement_limit=args.no_improvement_limit,
+        min_annual_return_delta=args.min_annual_return_delta,
+        min_return_risk_ratio_delta=args.min_return_risk_ratio_delta,
+        max_drawdown_increase=args.max_drawdown_increase,
+        max_turnover_increase=args.max_turnover_increase,
+    )
+    print(f"Improvement loop created at: {loop_dir}")
+    return 0
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     args_list = list(argv) if argv is not None else sys.argv[1:]
     if not args_list:
@@ -229,6 +308,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         "prompt-bundle",
         "validate-proposal",
         "child-run",
+        "loop",
     }:
         parser = build_parser()
         args = parser.parse_args(args_list)
@@ -244,6 +324,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             return _validate_proposal_from_namespace(args)
         if args.command == "child-run":
             return _create_child_run_from_namespace(args)
+        if args.command == "loop":
+            return _run_loop_from_namespace(args)
         parser.print_help()
         return 2
 
