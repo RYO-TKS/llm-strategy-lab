@@ -10,8 +10,8 @@ Phase 1 では、次の 4 要素を最小動作品として揃えます。
 ## 現時点の前提
 
 このリポジトリは、Issue 駆動で最小構成を拡張していく研究基盤です。
-`make run-sample` は現時点で aligned dataset、MOM ベースライン戦略の signal / portfolio artifact、日次バックテスト series、metrics JSON を出力します。
-chart 類と transaction cost を加味した評価はまだ未実装です。
+`make run-sample` は現時点で aligned dataset、MOM ベースライン戦略の signal / portfolio artifact、日次バックテスト series、metrics JSON、FF3 / Carhart4 回帰 JSON、主要 SVG チャートを出力します。
+transaction cost を加味した評価はまだ未実装です。
 PCA 系の実装メモは [pca-subspace-notes.md](pca-subspace-notes.md) に残します。
 
 ## Phase 1 で満たすべきこと

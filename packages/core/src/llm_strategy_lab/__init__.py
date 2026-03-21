@@ -3,6 +3,7 @@
 from .backtest import run_daily_backtest
 from .config import load_experiment_config
 from .data_pipeline import prepare_aligned_research_dataset
+from .evaluation import run_backtest_evaluation
 from .models import (
     BacktestConfig,
     BacktestResult,
@@ -39,6 +40,7 @@ __all__ = [
     "SubspacePCAStrategy",
     "create_strategy",
     "run_daily_backtest",
+    "run_backtest_evaluation",
     "load_experiment_config",
     "prepare_aligned_research_dataset",
 ]

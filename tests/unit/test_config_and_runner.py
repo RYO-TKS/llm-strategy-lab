@@ -43,6 +43,7 @@ class ConfigAndRunnerTests(unittest.TestCase):
                         "  us_sectors: data/sample/us.csv",
                         "  jp_sectors: data/sample/jp.csv",
                         "  trading_calendar: data/sample/trading_calendar.csv",
+                        "  factor_returns: data/sample/factor_returns.csv",
                         "backtest:",
                         '  start: "2020-01-01"',
                         '  end: "2020-12-31"',
@@ -68,6 +69,10 @@ class ConfigAndRunnerTests(unittest.TestCase):
             self.assertEqual(
                 config.dataset.us_sectors,
                 (root / "data" / "sample" / "us.csv").resolve(),
+            )
+            self.assertEqual(
+                config.dataset.factor_returns,
+                (root / "data" / "sample" / "factor_returns.csv").resolve(),
             )
             self.assertEqual(config.backtest.start, date(2020, 1, 1))
             self.assertEqual(config.backtest.end, date(2020, 12, 31))
@@ -238,6 +243,18 @@ class ConfigAndRunnerTests(unittest.TestCase):
                 )
                 + "\n",
             )
+            _write_file(
+                root / "data" / "sample" / "factor_returns.csv",
+                "\n".join(
+                    [
+                        "date,mkt_rf,smb,hml,umd,rf",
+                        "2020-01-07,0.0040,0.0010,-0.0005,0.0008,0.0001",
+                        "2020-01-08,0.0035,0.0008,-0.0003,0.0006,0.0001",
+                        "2020-01-10,-0.0025,-0.0004,0.0007,-0.0006,0.0001",
+                    ]
+                )
+                + "\n",
+            )
             config_path = root / "configs" / "experiments" / "sample.yaml"
             _write_file(
                 config_path,
@@ -252,6 +269,7 @@ class ConfigAndRunnerTests(unittest.TestCase):
                         "  us_sectors: data/sample/us.csv",
                         "  jp_sectors: data/sample/jp.csv",
                         "  trading_calendar: data/sample/trading_calendar.csv",
+                        "  factor_returns: data/sample/factor_returns.csv",
                         "backtest:",
                         '  start: "2020-01-01"',
                         '  end: "2020-12-31"',
@@ -294,12 +312,23 @@ class ConfigAndRunnerTests(unittest.TestCase):
             self.assertTrue((first_run / "mom_backtest_daily.csv").exists())
             self.assertTrue((first_run / "mom_backtest_positions.csv").exists())
             self.assertTrue((first_run / "mom_backtest_metrics.json").exists())
+            self.assertTrue((first_run / "mom_factor_regressions.json").exists())
+            self.assertTrue((first_run / "mom_signal_ic.csv").exists())
+            self.assertTrue((first_run / "mom_equity_curve.svg").exists())
+            self.assertTrue((first_run / "mom_drawdown.svg").exists())
+            self.assertTrue((first_run / "mom_cumulative_ic.svg").exists())
+            self.assertEqual(
+                manifest["backtest_result"]["metadata"]["factor_regression_statuses"]["ff3"],
+                "insufficient_observations",
+            )
             self.assertIn("Backtest Window", summary)
             self.assertIn("Dataset Inputs", summary)
             self.assertIn("Aligned Signal Dates", summary)
             self.assertIn("Portfolio Dates Prepared", summary)
             self.assertIn("Annual Return", summary)
             self.assertIn("Max Drawdown", summary)
+            self.assertIn("FF3 Regression", summary)
+            self.assertIn("Charts Saved", summary)
 
     def test_constants_expose_expected_groups(self) -> None:
         self.assertIn("price", COLUMN_GROUPS)

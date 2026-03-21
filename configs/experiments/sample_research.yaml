@@ -7,6 +7,7 @@ dataset:
   us_sectors: data/sample/us_sectors.csv
   jp_sectors: data/sample/jp_sectors.csv
   trading_calendar: data/sample/trading_calendar.csv
+  factor_returns: data/sample/factor_returns.csv
 backtest:
   start: "2020-01-01"
   end: "2020-12-31"
