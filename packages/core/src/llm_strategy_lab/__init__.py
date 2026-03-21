@@ -14,6 +14,7 @@ from .models import (
     StrategyConfig,
 )
 from .strategies import (
+    DoubleSortStrategy,
     MomentumStrategy,
     PlainPCAStrategy,
     SubspacePCAStrategy,
@@ -31,6 +32,7 @@ __all__ = [
     "RunStatus",
     "StrategyArtifact",
     "StrategyConfig",
+    "DoubleSortStrategy",
     "MomentumStrategy",
     "PlainPCAStrategy",
     "SubspacePCAStrategy",

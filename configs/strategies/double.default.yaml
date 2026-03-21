@@ -1,0 +1,13 @@
+name: double
+q: 0.3
+rolling_window: 5
+mom:
+  rolling_window: 5
+pca_sub:
+  rolling_window: 5
+  components: 3
+  regularization: 0.1
+  subspace:
+    - global
+    - country_spread
+    - cyclical_vs_defensive

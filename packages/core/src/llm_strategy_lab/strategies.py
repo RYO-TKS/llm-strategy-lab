@@ -239,6 +239,27 @@ def _selected_per_side(universe_size: int, q: float) -> int:
     )
 
 
+def _rank_percentile(rank: int, universe_size: int) -> float:
+    if universe_size <= 1:
+        return 1.0
+    return 1.0 - ((rank - 1) / (universe_size - 1))
+
+
+def _resolve_nested_strategy_params(
+    params: Mapping[str, object],
+    key: str,
+) -> JsonDict:
+    raw_nested = params.get(key, {})
+    if raw_nested is None:
+        return {}
+    if not isinstance(raw_nested, Mapping):
+        raise ValueError(f"{key} must be a mapping when provided")
+    return {
+        str(nested_key): nested_value
+        for nested_key, nested_value in raw_nested.items()
+    }
+
+
 def _build_market_lookup(
     rows: Sequence[AlignedMarketReturn],
 ) -> Dict[date, Dict[str, float]]:
@@ -253,6 +274,15 @@ def _rounded_matrix(values: np.ndarray) -> List[List[float]]:
         [round(float(item), 6) for item in row]
         for row in values.tolist()
     ]
+
+
+def _index_signals_by_date_and_sector(
+    signals: Sequence[SignalRecord],
+) -> Dict[Tuple[date, str], SignalRecord]:
+    return {
+        (row.signal_date, row.sector): row
+        for row in signals
+    }
 
 
 def _build_feature_specs(
@@ -1074,10 +1104,208 @@ class SubspacePCAStrategy(QuantileLongShortStrategy):
         }
 
 
+class DoubleSortStrategy(QuantileLongShortStrategy):
+    """2x2 double sort that intersects MOM and PCA_SUB buckets."""
+
+    def __init__(self, config: StrategyConfig) -> None:
+        super().__init__(config)
+        mom_params = {
+            "q": self.q,
+            "rolling_window": self.rolling_window,
+        }
+        mom_params.update(_resolve_nested_strategy_params(config.params, "mom"))
+
+        pca_sub_params = {
+            "q": self.q,
+            "rolling_window": self.rolling_window,
+            "components": config.params.get("components", 3),
+            "regularization": config.params.get("regularization", 0.1),
+            "subspace": list(
+                config.params.get("subspace", DEFAULT_SUBSPACE_NAMES)
+            ),
+        }
+        pca_sub_params.update(_resolve_nested_strategy_params(config.params, "pca_sub"))
+
+        self.mom_strategy = MomentumStrategy(
+            StrategyConfig(
+                name="mom",
+                params_file=None,
+                params=mom_params,
+            )
+        )
+        self.pca_sub_strategy = SubspacePCAStrategy(
+            StrategyConfig(
+                name="pca_sub",
+                params_file=None,
+                params=pca_sub_params,
+            )
+        )
+        self._diagnostics_by_date: Dict[date, JsonDict] = {}
+
+    def compute_signal(self, dataset: PreparedResearchDataset) -> Tuple[SignalRecord, ...]:
+        mom_signals = self.mom_strategy.compute_signal(dataset)
+        pca_sub_signals = self.pca_sub_strategy.compute_signal(dataset)
+        mom_lookup = _index_signals_by_date_and_sector(mom_signals)
+        pca_sub_lookup = _index_signals_by_date_and_sector(pca_sub_signals)
+        signal_dates = sorted(
+            {row.signal_date for row in mom_signals}
+            & {row.signal_date for row in pca_sub_signals}
+        )
+        self._diagnostics_by_date = {}
+        signal_records: List[SignalRecord] = []
+
+        for signal_date in signal_dates:
+            mom_rows = [row for row in mom_signals if row.signal_date == signal_date]
+            pca_sub_rows = [row for row in pca_sub_signals if row.signal_date == signal_date]
+            mom_universe = len(mom_rows)
+            pca_sub_universe = len(pca_sub_rows)
+            combined_rows: List[JsonDict] = []
+            quadrant_members = {
+                "mom_high_pca_high": [],
+                "mom_high_pca_low": [],
+                "mom_low_pca_high": [],
+                "mom_low_pca_low": [],
+                "other": [],
+            }
+
+            for sector in dataset.jp_sectors:
+                mom_row = mom_lookup.get((signal_date, sector))
+                pca_sub_row = pca_sub_lookup.get((signal_date, sector))
+                if mom_row is None or pca_sub_row is None:
+                    continue
+
+                mom_percentile = _rank_percentile(mom_row.rank, mom_universe)
+                pca_sub_percentile = _rank_percentile(pca_sub_row.rank, pca_sub_universe)
+                composite_score = 0.5 * (mom_percentile + pca_sub_percentile)
+
+                quadrant = "other"
+                combined_signal = 0
+                if mom_row.signal > 0 and pca_sub_row.signal > 0:
+                    quadrant = "mom_high_pca_high"
+                    combined_signal = 1
+                elif mom_row.signal > 0 and pca_sub_row.signal < 0:
+                    quadrant = "mom_high_pca_low"
+                elif mom_row.signal < 0 and pca_sub_row.signal > 0:
+                    quadrant = "mom_low_pca_high"
+                elif mom_row.signal < 0 and pca_sub_row.signal < 0:
+                    quadrant = "mom_low_pca_low"
+                    combined_signal = -1
+
+                combined_rows.append(
+                    {
+                        "sector": sector,
+                        "signal": combined_signal,
+                        "score": composite_score,
+                        "mom_rank": mom_row.rank,
+                        "pca_sub_rank": pca_sub_row.rank,
+                        "mom_signal": mom_row.signal,
+                        "pca_sub_signal": pca_sub_row.signal,
+                        "lookback_start": max(
+                            mom_row.lookback_start,
+                            pca_sub_row.lookback_start,
+                        ),
+                        "lookback_end": min(
+                            mom_row.lookback_end,
+                            pca_sub_row.lookback_end,
+                        ),
+                        "window_size": min(
+                            mom_row.window_size,
+                            pca_sub_row.window_size,
+                        ),
+                        "quadrant": quadrant,
+                    }
+                )
+                quadrant_members[quadrant].append(sector)
+
+            ordered_rows = sorted(
+                combined_rows,
+                key=lambda item: (-float(item["score"]), str(item["sector"])),
+            )
+            self._diagnostics_by_date[signal_date] = {
+                "signal_date": signal_date.isoformat(),
+                "quadrant_members": quadrant_members,
+                "mom_selected_per_side": _selected_per_side(mom_universe, self.q),
+                "pca_sub_selected_per_side": _selected_per_side(pca_sub_universe, self.q),
+                "long_bucket_size": len(quadrant_members["mom_high_pca_high"]),
+                "short_bucket_size": len(quadrant_members["mom_low_pca_low"]),
+                "mom_parameters": dict(self.mom_strategy.config.params),
+                "pca_sub_parameters": dict(self.pca_sub_strategy.config.params),
+                "composite_scores": {
+                    str(item["sector"]): round(float(item["score"]), 6)
+                    for item in ordered_rows
+                },
+            }
+
+            for rank, item in enumerate(ordered_rows, start=1):
+                signal_records.append(
+                    SignalRecord(
+                        signal_date=signal_date,
+                        market=JP_MARKET,
+                        sector=str(item["sector"]),
+                        signal=int(item["signal"]),
+                        score=float(item["score"]),
+                        rank=rank,
+                        lookback_start=item["lookback_start"],
+                        lookback_end=item["lookback_end"],
+                        window_size=int(item["window_size"]),
+                    )
+                )
+
+        return tuple(signal_records)
+
+    def explain(
+        self,
+        *,
+        dataset: PreparedResearchDataset,
+        signals: Sequence[SignalRecord],
+        portfolio: Sequence[PortfolioRecord],
+    ) -> JsonDict:
+        signal_dates = sorted({row.signal_date for row in signals})
+        portfolio_dates = sorted({row.signal_date for row in portfolio})
+        latest_date = signal_dates[-1] if signal_dates else None
+        latest_diagnostic = (
+            self._diagnostics_by_date.get(latest_date) if latest_date else None
+        )
+        return {
+            "strategy_name": self.name,
+            "summary": (
+                "Run MOM and PCA_SUB on the same aligned dates, split the universe into high/low "
+                "buckets for each signal, and form a 2x2 double sort that goes long the "
+                "high-high intersection and short the low-low intersection."
+            ),
+            "signal_definition": (
+                "Each JP sector keeps its MOM and PCA_SUB cross-sectional bucket membership. "
+                "The double-sort score is the average of the two rank percentiles, while the "
+                "tradable signal is non-zero only for high-high and low-low intersections."
+            ),
+            "portfolio_construction": (
+                "Research mode uses equal-weight long-short exposure across the high-high and "
+                "low-low buckets with the same normalized weight contract as the other strategies."
+            ),
+            "parameters": {
+                "q": self.q,
+                "rolling_window": self.rolling_window,
+                "mom": dict(self.mom_strategy.config.params),
+                "pca_sub": dict(self.pca_sub_strategy.config.params),
+            },
+            "input_strategies": ["mom", "pca_sub"],
+            "jp_universe_size": len(dataset.jp_sectors),
+            "eligible_signal_dates": len(signal_dates),
+            "backtest_portfolio_dates": len(portfolio_dates),
+            "selected_per_side": _selected_per_side(len(dataset.jp_sectors), self.q),
+            "signal_dates": [value.isoformat() for value in signal_dates],
+            "portfolio_dates": [value.isoformat() for value in portfolio_dates],
+            "latest_diagnostic": latest_diagnostic,
+            "comparison_ready_with": ["mom", "pca_plain", "pca_sub"],
+        }
+
+
 def create_strategy(config: StrategyConfig) -> Strategy:
     strategy_name = config.name.strip().lower()
     if strategy_name == "mom":
         return MomentumStrategy(config)
+    if strategy_name == "double":
+        return DoubleSortStrategy(config)
     if strategy_name == "pca_plain":
         return PlainPCAStrategy(config)
     if strategy_name == "pca_sub":
