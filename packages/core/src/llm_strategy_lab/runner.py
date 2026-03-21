@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import json
 import logging
+from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
 
 from .backtest import run_daily_backtest
-from .config import load_experiment_config
+from .config import load_experiment_config, load_strategy_config
 from .data_pipeline import prepare_aligned_research_dataset
 from .evaluation import run_backtest_evaluation
 from .models import ExperimentConfig, RunRecord, RunStatus
@@ -28,6 +29,45 @@ def next_run_directory(output_root: Path, experiment_id: str) -> Path:
     run_dir = experiment_root / f"{next_index:04d}"
     run_dir.mkdir(parents=True, exist_ok=False)
     return run_dir
+
+
+def _apply_strategy_override(
+    config: ExperimentConfig,
+    *,
+    strategy_name: str | None = None,
+    strategy_params_file: Path | None = None,
+) -> ExperimentConfig:
+    if strategy_name is None and strategy_params_file is None:
+        return config
+
+    strategy_mapping = dict(config.strategy.raw)
+    if strategy_name is not None:
+        strategy_mapping["name"] = strategy_name
+
+    effective_name = str(strategy_mapping.get("name", config.strategy.name))
+    if strategy_params_file is not None:
+        strategy_mapping["params_file"] = str(strategy_params_file)
+    elif strategy_name is not None:
+        default_params_file = (
+            config.project_root / "configs" / "strategies" / f"{effective_name}.default.yaml"
+        )
+        if default_params_file.exists():
+            strategy_mapping["params_file"] = str(default_params_file)
+        else:
+            strategy_mapping.pop("params_file", None)
+
+    overridden_strategy = load_strategy_config(
+        strategy_mapping,
+        config_path=config.config_path,
+        project_root=config.project_root,
+    )
+    raw_payload = dict(config.raw)
+    raw_payload["strategy"] = dict(strategy_mapping)
+    return replace(
+        config,
+        strategy=overridden_strategy,
+        raw=raw_payload,
+    )
 
 
 def _build_summary(config: ExperimentConfig, run_record: RunRecord) -> str:
@@ -129,8 +169,19 @@ def _build_summary(config: ExperimentConfig, run_record: RunRecord) -> str:
     )
 
 
-def create_scaffold_run(config_path: Path, output_root: Path | None = None) -> Path:
+def run_experiment(
+    config_path: Path,
+    output_root: Path | None = None,
+    *,
+    strategy_name: str | None = None,
+    strategy_params_file: Path | None = None,
+) -> Path:
     config = load_experiment_config(config_path)
+    config = _apply_strategy_override(
+        config,
+        strategy_name=strategy_name,
+        strategy_params_file=strategy_params_file,
+    )
     logging.basicConfig(
         level=getattr(logging, config.environment.log_level.upper(), logging.INFO),
         format="%(levelname)s %(name)s: %(message)s",
@@ -199,6 +250,12 @@ def create_scaffold_run(config_path: Path, output_root: Path | None = None) -> P
             "strategy_config": config.strategy.to_dict(),
             "dataset_config": config.dataset.to_dict() if config.dataset else None,
             "backtest_config": config.backtest.to_dict(),
+            "cli_overrides": {
+                "strategy_name": strategy_name,
+                "strategy_params_file": (
+                    str(strategy_params_file.resolve()) if strategy_params_file else None
+                ),
+            },
             "data_alignment": data_alignment_summary,
         },
     )
@@ -211,3 +268,7 @@ def create_scaffold_run(config_path: Path, output_root: Path | None = None) -> P
     )
     (run_dir / "SUMMARY.md").write_text(summary, encoding="utf-8")
     return run_dir
+
+
+def create_scaffold_run(config_path: Path, output_root: Path | None = None) -> Path:
+    return run_experiment(config_path=config_path, output_root=output_root)

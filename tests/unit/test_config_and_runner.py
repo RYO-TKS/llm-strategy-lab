@@ -9,7 +9,7 @@ from pathlib import Path
 from llm_strategy_lab.config import load_experiment_config
 from llm_strategy_lab.constants import COLUMN_GROUPS, PRICE_COLUMNS, SIGNAL
 from llm_strategy_lab.data_pipeline import prepare_aligned_research_dataset
-from llm_strategy_lab.runner import create_scaffold_run
+from llm_strategy_lab.runner import create_scaffold_run, run_experiment
 
 
 def _write_file(path: Path, content: str) -> None:
@@ -111,6 +111,193 @@ class ConfigAndRunnerTests(unittest.TestCase):
 
             self.assertEqual(config.strategy.params["quantile"], 0.2)
             self.assertEqual(config.strategy.params["rolling_window"], 120)
+
+    def test_run_experiment_can_override_strategy_from_cli_selection(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            _write_file(root / "pyproject.toml", "[project]\nname = 'llm-strategy-lab'\n")
+            _write_file(
+                root / "configs" / "environments" / "dev.yaml",
+                "name: dev\noutput_root: runs\nlog_level: INFO\nseed: 42\n",
+            )
+            _write_file(
+                root / "configs" / "strategies" / "mom.yaml",
+                "name: mom\nq: 0.3\nrolling_window: 1\n",
+            )
+            _write_file(
+                root / "configs" / "strategies" / "pca_plain.default.yaml",
+                "name: pca_plain\nq: 0.3\nrolling_window: 5\ncomponents: 2\n",
+            )
+            _write_file(
+                root / "data" / "sample" / "us.csv",
+                "\n".join(
+                    [
+                        "date,sector,open,close",
+                        "2020-01-06,COMMUNICATION_SERVICES,99.4,100.0",
+                        "2020-01-07,COMMUNICATION_SERVICES,100.4,101.8",
+                        "2020-01-08,COMMUNICATION_SERVICES,101.2,101.1",
+                        "2020-01-06,CONSUMER_DISCRETIONARY,106.4,107.0",
+                        "2020-01-07,CONSUMER_DISCRETIONARY,107.4,108.8",
+                        "2020-01-08,CONSUMER_DISCRETIONARY,108.2,108.1",
+                        "2020-01-06,CONSUMER_STAPLES,113.4,114.0",
+                        "2020-01-07,CONSUMER_STAPLES,114.4,115.8",
+                        "2020-01-08,CONSUMER_STAPLES,115.2,115.1",
+                        "2020-01-06,ENERGY,120.4,121.0",
+                        "2020-01-07,ENERGY,121.4,122.8",
+                        "2020-01-08,ENERGY,122.2,122.1",
+                        "2020-01-06,FINANCIALS,127.4,128.0",
+                        "2020-01-07,FINANCIALS,128.4,129.8",
+                        "2020-01-08,FINANCIALS,129.2,129.1",
+                        "2020-01-06,HEALTH_CARE,134.4,135.0",
+                        "2020-01-07,HEALTH_CARE,135.4,136.8",
+                        "2020-01-08,HEALTH_CARE,136.2,136.1",
+                        "2020-01-06,INDUSTRIALS,141.4,142.0",
+                        "2020-01-07,INDUSTRIALS,142.4,143.8",
+                        "2020-01-08,INDUSTRIALS,143.2,143.1",
+                        "2020-01-06,INFORMATION_TECHNOLOGY,148.4,149.0",
+                        "2020-01-07,INFORMATION_TECHNOLOGY,149.4,150.8",
+                        "2020-01-08,INFORMATION_TECHNOLOGY,150.2,150.1",
+                        "2020-01-06,MATERIALS,155.4,156.0",
+                        "2020-01-07,MATERIALS,156.4,157.8",
+                        "2020-01-08,MATERIALS,157.2,157.1",
+                        "2020-01-06,REAL_ESTATE,162.4,163.0",
+                        "2020-01-07,REAL_ESTATE,163.4,164.8",
+                        "2020-01-08,REAL_ESTATE,164.2,164.1",
+                        "2020-01-06,UTILITIES,169.4,170.0",
+                        "2020-01-07,UTILITIES,170.4,171.8",
+                        "2020-01-08,UTILITIES,171.2,171.1",
+                    ]
+                )
+                + "\n",
+            )
+            _write_file(
+                root / "data" / "sample" / "jp.csv",
+                "\n".join(
+                    [
+                        "date,sector,open,close",
+                        "2020-01-07,FOODS,49.7,50.7",
+                        "2020-01-08,FOODS,50.2,51.0",
+                        "2020-01-10,FOODS,50.1,49.6",
+                        "2020-01-07,ENERGY_RESOURCES,52.7,53.7",
+                        "2020-01-08,ENERGY_RESOURCES,53.2,54.0",
+                        "2020-01-10,ENERGY_RESOURCES,53.1,52.6",
+                        "2020-01-07,CONSTRUCTION_MATERIALS,55.7,56.7",
+                        "2020-01-08,CONSTRUCTION_MATERIALS,56.2,57.0",
+                        "2020-01-10,CONSTRUCTION_MATERIALS,56.1,55.6",
+                        "2020-01-07,RAW_MATERIALS_CHEMICALS,58.7,59.7",
+                        "2020-01-08,RAW_MATERIALS_CHEMICALS,59.2,60.0",
+                        "2020-01-10,RAW_MATERIALS_CHEMICALS,59.1,58.6",
+                        "2020-01-07,PHARMACEUTICALS,61.7,62.7",
+                        "2020-01-08,PHARMACEUTICALS,62.2,63.0",
+                        "2020-01-10,PHARMACEUTICALS,62.1,61.6",
+                        "2020-01-07,AUTOMOBILES_TRANSPORTATION,64.7,65.7",
+                        "2020-01-08,AUTOMOBILES_TRANSPORTATION,65.2,66.0",
+                        "2020-01-10,AUTOMOBILES_TRANSPORTATION,65.1,64.6",
+                        "2020-01-07,STEEL_NONFERROUS,67.7,68.7",
+                        "2020-01-08,STEEL_NONFERROUS,68.2,69.0",
+                        "2020-01-10,STEEL_NONFERROUS,68.1,67.6",
+                        "2020-01-07,MACHINERY,70.7,71.7",
+                        "2020-01-08,MACHINERY,71.2,72.0",
+                        "2020-01-10,MACHINERY,71.1,70.6",
+                        "2020-01-07,ELECTRIC_APPLIANCES_PRECISION,73.7,74.7",
+                        "2020-01-08,ELECTRIC_APPLIANCES_PRECISION,74.2,75.0",
+                        "2020-01-10,ELECTRIC_APPLIANCES_PRECISION,74.1,73.6",
+                        "2020-01-07,IT_SERVICES_OTHERS,76.7,77.7",
+                        "2020-01-08,IT_SERVICES_OTHERS,77.2,78.0",
+                        "2020-01-10,IT_SERVICES_OTHERS,77.1,76.6",
+                        "2020-01-07,ELECTRIC_POWER_GAS,79.7,80.7",
+                        "2020-01-08,ELECTRIC_POWER_GAS,80.2,81.0",
+                        "2020-01-10,ELECTRIC_POWER_GAS,80.1,79.6",
+                        "2020-01-07,TRANSPORTATION_LOGISTICS,82.7,83.7",
+                        "2020-01-08,TRANSPORTATION_LOGISTICS,83.2,84.0",
+                        "2020-01-10,TRANSPORTATION_LOGISTICS,83.1,82.6",
+                        "2020-01-07,COMMERCIAL_WHOLESALE_TRADE,85.7,86.7",
+                        "2020-01-08,COMMERCIAL_WHOLESALE_TRADE,86.2,87.0",
+                        "2020-01-10,COMMERCIAL_WHOLESALE_TRADE,86.1,85.6",
+                        "2020-01-07,RETAIL_TRADE,88.7,89.7",
+                        "2020-01-08,RETAIL_TRADE,89.2,90.0",
+                        "2020-01-10,RETAIL_TRADE,89.1,88.6",
+                        "2020-01-07,BANKS,91.7,92.7",
+                        "2020-01-08,BANKS,92.2,93.0",
+                        "2020-01-10,BANKS,92.1,91.6",
+                        "2020-01-07,FINANCIALS_EX_BANKS,94.7,95.7",
+                        "2020-01-08,FINANCIALS_EX_BANKS,95.2,96.0",
+                        "2020-01-10,FINANCIALS_EX_BANKS,95.1,94.6",
+                        "2020-01-07,REAL_ESTATE,97.7,98.7",
+                        "2020-01-08,REAL_ESTATE,98.2,99.0",
+                        "2020-01-10,REAL_ESTATE,98.1,97.6",
+                    ]
+                )
+                + "\n",
+            )
+            _write_file(
+                root / "data" / "sample" / "calendar.csv",
+                "\n".join(
+                    [
+                        "market,date,is_open",
+                        "US,2020-01-06,1",
+                        "US,2020-01-07,1",
+                        "US,2020-01-08,1",
+                        "JP,2020-01-06,0",
+                        "JP,2020-01-07,1",
+                        "JP,2020-01-08,1",
+                        "JP,2020-01-09,0",
+                        "JP,2020-01-10,1",
+                    ]
+                )
+                + "\n",
+            )
+            _write_file(
+                root / "data" / "sample" / "factor_returns.csv",
+                "\n".join(
+                    [
+                        "date,mkt_rf,smb,hml,umd,rf",
+                        "2020-01-07,0.0040,0.0010,-0.0005,0.0008,0.0001",
+                        "2020-01-08,0.0035,0.0008,-0.0003,0.0006,0.0001",
+                        "2020-01-10,-0.0025,-0.0004,0.0007,-0.0006,0.0001",
+                    ]
+                )
+                + "\n",
+            )
+            config_path = _write_and_return_path(
+                root / "configs" / "experiments" / "sample.yaml",
+                "\n".join(
+                    [
+                        "experiment_id: sample_research",
+                        "environment: dev",
+                        "strategy:",
+                        "  name: mom",
+                        "  params_file: configs/strategies/mom.yaml",
+                        "dataset:",
+                        "  us_sectors: data/sample/us.csv",
+                        "  jp_sectors: data/sample/jp.csv",
+                        "  trading_calendar: data/sample/calendar.csv",
+                        "  factor_returns: data/sample/factor_returns.csv",
+                        "backtest:",
+                        '  start: "2020-01-01"',
+                        '  end: "2020-12-31"',
+                        "  rebalance: monthly",
+                    ]
+                )
+                + "\n",
+            )
+
+            run_dir = run_experiment(
+                config_path=config_path,
+                strategy_name="pca_plain",
+            )
+
+            manifest = json.loads((run_dir / "manifest.json").read_text(encoding="utf-8"))
+            self.assertEqual(manifest["strategy"], "pca_plain")
+            self.assertEqual(
+                manifest["metadata"]["strategy_config"]["params_file"],
+                str((root / "configs" / "strategies" / "pca_plain.default.yaml").resolve()),
+            )
+            self.assertEqual(
+                manifest["metadata"]["cli_overrides"]["strategy_name"],
+                "pca_plain",
+            )
+            self.assertTrue((run_dir / "pca_plain_signals.csv").exists())
 
     def test_create_scaffold_run_uses_environment_output_root_and_writes_manifest(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
