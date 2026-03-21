@@ -67,6 +67,35 @@ class CliTests(unittest.TestCase):
         self.assertEqual(mock_run.call_args.kwargs["strategy_name"], "double")
         self.assertIsNone(mock_run.call_args.kwargs["output_root"])
 
+    def test_main_runs_compare_subcommand(self) -> None:
+        comparison_dir = Path("/tmp/runs/comparisons/sample_research-0001-to-0002")
+        with patch(
+            "llm_strategy_lab.cli.compare_runs",
+            return_value=comparison_dir,
+        ) as mock_compare:
+            stdout = io.StringIO()
+            with redirect_stdout(stdout):
+                result = main(
+                    [
+                        "compare",
+                        "--parent-run",
+                        "runs/sample_research/0001",
+                        "--candidate-run",
+                        "runs/sample_research/0002",
+                    ]
+                )
+
+        self.assertEqual(result, 0)
+        self.assertIn(str(comparison_dir), stdout.getvalue())
+        self.assertEqual(
+            mock_compare.call_args.kwargs,
+            {
+                "parent_run": Path("runs/sample_research/0001"),
+                "candidate_run": Path("runs/sample_research/0002"),
+                "output_root": None,
+            },
+        )
+
     def test_main_supports_legacy_config_arguments(self) -> None:
         run_dir = Path("/tmp/runs/sample_research/0002")
         with patch(

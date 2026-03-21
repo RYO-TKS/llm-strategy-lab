@@ -153,6 +153,40 @@ class BacktestResult:
         }
 
 
+@dataclass(frozen=True)
+class RunComparisonRecord:
+    lineage_id: str
+    experiment_id: str
+    parent_run_id: str
+    candidate_run_id: str
+    created_at_utc: datetime
+    output_dir: Path
+    parent_run: JsonDict = field(default_factory=dict)
+    candidate_run: JsonDict = field(default_factory=dict)
+    metric_comparison: JsonDict = field(default_factory=dict)
+    factor_regression_comparison: JsonDict = field(default_factory=dict)
+    config_diff: JsonDict = field(default_factory=dict)
+    artifact_paths: Mapping[str, Path] = field(default_factory=dict)
+    metadata: JsonDict = field(default_factory=dict)
+
+    def to_dict(self) -> JsonDict:
+        return {
+            "lineage_id": self.lineage_id,
+            "experiment_id": self.experiment_id,
+            "parent_run_id": self.parent_run_id,
+            "candidate_run_id": self.candidate_run_id,
+            "created_at_utc": self.created_at_utc.isoformat(),
+            "output_dir": str(self.output_dir),
+            "parent_run": dict(self.parent_run),
+            "candidate_run": dict(self.candidate_run),
+            "metric_comparison": dict(self.metric_comparison),
+            "factor_regression_comparison": dict(self.factor_regression_comparison),
+            "config_diff": dict(self.config_diff),
+            "artifact_paths": _path_mapping_to_strings(self.artifact_paths),
+            "metadata": dict(self.metadata),
+        }
+
+
 class RunStatus(str, Enum):
     SCAFFOLD = "scaffold"
     RUNNING = "running"

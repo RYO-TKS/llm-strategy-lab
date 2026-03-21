@@ -1,6 +1,7 @@
 """Core package for llm-strategy-lab."""
 
 from .backtest import run_daily_backtest
+from .comparison import compare_runs
 from .config import load_experiment_config
 from .data_pipeline import prepare_aligned_research_dataset
 from .evaluation import run_backtest_evaluation
@@ -10,6 +11,7 @@ from .models import (
     DatasetConfig,
     EnvironmentConfig,
     ExperimentConfig,
+    RunComparisonRecord,
     RunRecord,
     RunStatus,
     StrategyArtifact,
@@ -28,6 +30,7 @@ __all__ = [
     "__version__",
     "BacktestConfig",
     "BacktestResult",
+    "RunComparisonRecord",
     "DatasetConfig",
     "EnvironmentConfig",
     "ExperimentConfig",
@@ -42,6 +45,7 @@ __all__ = [
     "create_strategy",
     "run_daily_backtest",
     "run_backtest_evaluation",
+    "compare_runs",
     "run_experiment",
     "load_experiment_config",
     "prepare_aligned_research_dataset",

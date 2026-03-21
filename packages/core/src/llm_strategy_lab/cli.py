@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 from typing import Sequence
 
+from .comparison import compare_runs
 from .config import find_project_root
 from .runner import run_experiment
 
@@ -56,6 +57,26 @@ def build_parser() -> argparse.ArgumentParser:
         help="Run the bundled sample experiment config.",
     )
     _add_run_arguments(sample_parser, include_config=False)
+
+    compare_parser = subparsers.add_parser(
+        "compare",
+        help="Compare two completed runs and write lineage artifacts.",
+    )
+    compare_parser.add_argument(
+        "--parent-run",
+        required=True,
+        help="Path to the parent/baseline run directory or manifest.json.",
+    )
+    compare_parser.add_argument(
+        "--candidate-run",
+        required=True,
+        help="Path to the candidate run directory or manifest.json.",
+    )
+    compare_parser.add_argument(
+        "--output-root",
+        default=None,
+        help="Optional override for the comparison artifact root directory.",
+    )
     return parser
 
 
@@ -99,19 +120,31 @@ def _run_from_namespace(args: argparse.Namespace, *, config_path: Path) -> int:
     return 0
 
 
+def _compare_from_namespace(args: argparse.Namespace) -> int:
+    comparison_dir = compare_runs(
+        parent_run=Path(args.parent_run),
+        candidate_run=Path(args.candidate_run),
+        output_root=Path(args.output_root) if args.output_root else None,
+    )
+    print(f"Run comparison created at: {comparison_dir}")
+    return 0
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     args_list = list(argv) if argv is not None else sys.argv[1:]
     if not args_list:
         build_parser().print_help()
         return 2
 
-    if args_list[0] in {"run", "sample"}:
+    if args_list[0] in {"run", "sample", "compare"}:
         parser = build_parser()
         args = parser.parse_args(args_list)
         if args.command == "run":
             return _run_from_namespace(args, config_path=Path(args.config))
         if args.command == "sample":
             return _run_from_namespace(args, config_path=resolve_sample_config_path())
+        if args.command == "compare":
+            return _compare_from_namespace(args)
         parser.print_help()
         return 2
 
